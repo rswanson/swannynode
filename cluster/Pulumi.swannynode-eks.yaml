@@ -1,0 +1,12 @@
+config:
+  aws:region: us-east-2
+  swannynode-cluster:privateSubnet1:
+    secure: AAABACsbLiLIuPlQpXA9ywbtzingfJNK1HpD3yRX2Hnp209aBf92GVZtYqIei0FF3btNGbJuXBM=
+  swannynode-cluster:privateSubnet2:
+    secure: AAABAIe5OrFolqzdxBl7vD5ZXHQFcsdfOo0r67U9VWDVnEdvcAQj8qmWqgO2h0aiBlZ13WLV8kc=
+  swannynode-cluster:publicSubnet1:
+    secure: AAABAAED+LpCVjnntJXXTvYkzM0oh8isCR1MinHxOumFsWQYIWBqzWUkSAq0AAtYirtUXItSsjY=
+  swannynode-cluster:publicSubnet2:
+    secure: AAABAFdRXUVIH5cZvi8LHGxra8HulTRj06wGgqDhcuYoBXeh4UtWBBwEMplInuLcS0mZ58Cq0Zk=
+  swannynode-cluster:vpcId:
+    secure: AAABAA5RcWCSn7f3TxiG8PThbiGeg3+ErOIl7XCgZSjEg2VFNgB4eZfIbY+njyISdbzWEg8=

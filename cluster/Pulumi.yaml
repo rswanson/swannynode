@@ -1,0 +1,34 @@
+name: swannynode-cluster
+runtime: yaml
+description: The primary EKS cluster for swannynode us-east-2
+outputs: {}
+# Export the name of the bucket
+configuration:
+  vpcId:
+    type: string
+    secret: true
+  privateSubnet1:
+    type: string
+    secret: true
+  privateSubnet2:
+    type: string
+    secret: true
+  publicSubnet1:
+    type: string
+    secret: true
+  publicSubnet2:
+    type: string
+    secret: true
+resources:
+  my-cluster:
+    type: eks:Cluster
+    properties:
+      # Reference your existing VPC and subnets
+      vpcId: ${vpcId}
+      privateSubnetIds: ["${privateSubnet1}", "${privateSubnet2}"] # Replace with your private subnet IDs
+      publicSubnetIds: ["${publicSubnet1}", "${publicSubnet2}"] # Replace with your public subnet IDs
+      instanceType: "m7g.xlarge"
+      desiredCapacity: 2
+      minSize: 2
+      maxSize: 2
+      nodeAssociatePublicIpAddress: false # Assuming that these primary nodes should not have public IP

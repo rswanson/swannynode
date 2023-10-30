@@ -1,0 +1,137 @@
+name: workload
+runtime: yaml
+description: the first swannykube workload
+resources:
+  rethP2pService:
+    type: kubernetes:core/v1:Service
+    properties:
+      metadata:
+        name: reth
+        labels:
+          app: reth
+      spec:
+        type: LoadBalancer
+        ports:
+        - port: 30303
+          name: peer-to-peer
+        selector:
+          app: reth
+  rethSecureApiService:
+    type: kubernetes:core/v1:Service
+    properties:
+      metadata:
+        name: reth-secured-api
+        labels:
+          app: reth
+      spec:
+        clusterIP: None
+        ports:
+        - port: 9551
+          name: reth-secured-api
+        selector:
+          app: reth
+  rethStatefulSet:
+    type: kubernetes:apps/v1:StatefulSet
+    properties:
+      metadata:
+        labels:
+          app: reth
+        name: reth
+      spec:
+        serviceName: "reth"
+        replicas: 1
+        selector:
+          matchLabels:
+            app: reth
+        template:
+          metadata:
+            labels:
+              app: reth
+            name: reth
+          spec:
+            terminationGracePeriodSeconds: 10
+            containers:
+            - name: reth
+              image: "reth:local"
+              command: ["reth", "node"]
+              args: ["--chain", "base", "--rollup.sequencer-http", "https://sequencer.base.org", "--http", "--ws", "--authrpc.port", "9551", "--authrpc.addr", "0.0.0.0", "--authrpc.jwtsecret", "/secrets/jwt", "--metrics", "0.0.0.0:9001"]
+              ports:
+              - name: http
+                containerPort: 9001
+                protocol: TCP
+              - name: tcpconnect
+                containerPort: 30303
+                protocol: TCP
+              - name: udpconnect
+                containerPort: 30303
+                protocol: UDP
+              - name: engine-api
+                containerPort: 9551
+                protocol: TCP
+              - name: http-rpc
+                containerPort: 8545
+                protocol: TCP
+              volumeMounts:
+              - name: "ethereum-storage"
+                mountPath: "/root/.local/share/reth/mainnet/db"
+              - name: "secret-volume"
+                mountPath: "/secrets/"
+                readOnly: true
+            volumes:
+            - name: "secret-volume"
+              secret:
+                secretName: "jwt-secret"
+        volumeClaimTemplates:
+        - metadata:
+            name: "ethereum-storage"
+          spec:
+            accessModes: ["ReadWriteMany"]
+            resources:
+              requests:
+                storage: "1Ti"
+  opNodeStatefulSet:
+    type: kubernetes:apps/v1:StatefulSet
+    properties:
+      metadata:
+        labels:
+          app: op-node
+        name: op-node
+      spec:
+        serviceName: "op-node"
+        replicas: 1
+        selector:
+          matchLabels:
+            app: op-node
+        template:
+          metadata:
+            labels:
+              app: op-node
+            name: op-node
+          spec:
+            terminationGracePeriodSeconds: 10
+            containers:
+            - name: op-node
+              image: "us-docker.pkg.dev/oplabs-tools-artifacts/images/op-node:v1.3.1"
+              command: ["op-node"]
+              args: ["--l1", "https://rpc.ankr.com/eth/412b85f324988ab3a65cdca29f1c06be852eb1cae968a6ce5fd3a30eb7c1a48e", "--l2", "http://reth-secured-api.default.svc.cluster.local:9551", "--rollup.config", "/configs/rollup.json", "--rpc.addr", "0.0.0.0", "--rpc.port", "8545", "--l2.jwt-secret", "/secrets/jwt", "l1.trustrpc"]
+              ports:
+              - name: metrics
+                containerPort: 9001
+                protocol: TCP
+              - name: http
+                containerPort: 8545
+                protocol: TCP
+              volumeMounts:
+              - name: "secret-volume"
+                mountPath: "/secrets/"
+              - name: "rollup-configmap"
+                mountPath: "/configs/"
+            volumes:
+            - name: "secret-volume"
+              secret:
+                secretName: "jwt-secret"
+            - name: "rollup-configmap"
+              configMap:
+                name: "opnode-config"
+
+

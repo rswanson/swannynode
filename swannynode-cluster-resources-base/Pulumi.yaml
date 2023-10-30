@@ -1,0 +1,69 @@
+name: swannynode
+runtime: yaml
+description: local cluster experimenting
+configuration:
+  jwt:
+    type: string
+    secret: true
+resources:
+  prometheusConfigMap:
+    type: kubernetes:core/v1:ConfigMap
+    properties:
+      metadata:
+        namespace: "default"
+        name: prometheus-config
+      data:
+        prometheus.yml: "placeholder"
+
+  rethConfigMap:
+    type: kubernetes:core/v1:ConfigMap
+    properties:
+      metadata:
+        namespace: "default"
+        name: reth-config
+      data:
+        reth.yml: "placeholder"
+
+  opNodeConfigMap:
+    type: kubernetes:core/v1:ConfigMap
+    properties:
+      metadata:
+        namespace: "default"
+        name: opnode-config
+      data:
+        rollup.json: "{ \n\"genesis\": {\n  \"l1\": {\n    \"hash\": \"0x5c13d307623a926cd31415036c8b7fa14572f9dac64528e857a470511fc30771\",\n    \"number\": 17481768\n  },\n  \"l2\": {\n    \"hash\": \"0xf712aa9241cc24369b143cf6dce85f0902a9731e70d66818a3a5845b296c73dd\",\n    \"number\": 0\n  },\n  \"l2_time\": 1686789347,\n  \"system_config\": {\n    \"batcherAddr\": \"0x5050f69a9786f081509234f1a7f4684b5e5b76c9\",\n    \"overhead\": \"0x00000000000000000000000000000000000000000000000000000000000000bc\",\n    \"scalar\": \"0x00000000000000000000000000000000000000000000000000000000000a6fe0\",\n    \"gasLimit\": 30000000\n  }\n},\n\"block_time\": 2,\n\"max_sequencer_drift\": 600,\n\"seq_window_size\": 3600,\n\"channel_timeout\": 300,\n\"l1_chain_id\": 1,\n\"l2_chain_id\": 8453,\n\"regolith_time\": 0,\n\"batch_inbox_address\": \"0xff00000000000000000000000000000000008453\",\n\"deposit_contract_address\": \"0x49048044d57e1c92a77f79988d21fa8faf74e97e\",\n\"l1_system_config_address\": \"0x73a79fab69143498ed3712e519a88a918e1f4072\"\n}\n    #magic___^_^___line\n"
+  jwtSecret:
+    type: kubernetes:core/v1:Secret
+    properties:
+      metadata:
+        namespace: "default"
+        name: jwt-secret
+      data:
+        jwt: ${jwt}
+
+  rethPersistentVolume:
+    type: kubernetes:core/v1:PersistentVolume
+    properties:
+      metadata:
+        name: "reth-pv"
+      spec:
+        capacity:
+          storage: "1Ti"
+        accessModes:
+        - "ReadWriteMany"
+        persistentVolumeReclaimPolicy: "Retain"
+        hostPath:
+          path: "/mnt/reth/data"
+
+  rethPersistentVolumeClaim:
+    type: kubernetes:core/v1:PersistentVolumeClaim
+    properties:
+      metadata:
+        namespace: "kube-system"
+        name: "reth-pvc"
+      spec:
+        accessModes:
+        - "ReadWriteMany"
+        resources:
+          requests:
+            storage: "1Ti"

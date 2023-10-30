@@ -1,0 +1,5 @@
+name: netdata-stack
+runtime: yaml
+description: Deploy netdata parent node
+resources:
+
