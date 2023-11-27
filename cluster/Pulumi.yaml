@@ -25,7 +25,27 @@ variables:
   privateSubnet2: ${privateSubnet2}
   publicSubnet1: ${publicSubnet1}
   publicSubnet2: ${publicSubnet2}
+  managedPolicyArns:
+  - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+  - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+  - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+  assumeRolePolicy:
+    fn::toJSON:
+      Version: 2012-10-17
+      Statement:
+      - Action: sts:AssumeRole
+        Effect: Allow
+        Sid: ""
+        Principal:
+          Service: ec2.amazonaws.com
+
 resources:
+  nodegroup-iam-role:
+    type: aws:iam:Role
+    properties:
+      assumeRolePolicy: ${assumeRolePolicy}
+      managedPolicyArns: ${managedPolicyArns}
+
   swannynode-cluster:
     type: eks:Cluster
     properties:
@@ -34,9 +54,20 @@ resources:
       vpcId: ${vpcId}
       privateSubnetIds: ["${privateSubnet1}", "${privateSubnet2}"] # Replace with your private subnet IDs
       publicSubnetIds: ["${publicSubnet1}", "${publicSubnet2}"] # Replace with your public subnet IDs
-      instanceType: "m7g.xlarge"
-      desiredCapacity: 2
-      minSize: 2
-      maxSize: 2
-      nodeAssociatePublicIpAddress: false # Assuming that these primary nodes should not have public IP
-
+      nodeAssociatePublicIpAddress: false
+      instanceRole: ${nodegroup-iam-role}
+      skipDefaultNodeGroup: true
+  nodegroup:
+    type: eks:ManagedNodeGroup
+    properties:
+      cluster: ${swannynode-cluster}
+      nodeRoleArn: ${nodegroup-iam-role.arn}
+      instanceTypes: ["m7g.xlarge"]
+      amiType: "AL2_ARM_64"
+      nodeGroupNamePrefix: "swannynode"
+      scalingConfig:
+        desiredSize: 2
+        minSize: 2
+        maxSize: 2
+      labels:
+        nodegroup: primary
