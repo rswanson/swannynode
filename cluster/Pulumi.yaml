@@ -1,8 +1,8 @@
 name: swannynode-cluster
 runtime: yaml
 description: The primary EKS cluster for swannynode us-east-2
-outputs: {}
-# Export the name of the bucket
+outputs:
+  kubeconfig: ${swannynode-cluster.kubeconfig}
 config:
   vpcId:
     type: string
