@@ -1,5 +1,7 @@
 config:
   aws:region: us-east-2
+  swannynode-cluster:hostedZoneId:
+    secure: AAABAKz1hr8+/vUz429fLT4vNUHUq1zEUyvoHkYUhBsNeR+qJF5KnJ+oofAyf+FHrlvCF7k=
   swannynode-cluster:privateSubnet1:
     secure: AAABACsbLiLIuPlQpXA9ywbtzingfJNK1HpD3yRX2Hnp209aBf92GVZtYqIei0FF3btNGbJuXBM=
   swannynode-cluster:privateSubnet2:
