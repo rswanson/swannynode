@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/eks"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
@@ -201,40 +199,4 @@ func main() {
 
 		return nil
 	})
-}
-
-// generateKubeconfig generates a kubeconfig file given the endpoint, certificate authority, and cluster name.
-func generateKubeconfig(endpoint string, caData string, clusterName string) string {
-	kubeconfigTemplate := `
-apiVersion: v1
-clusters:
-- cluster:
-    server: %v
-    certificate-authority-data: %v
-  name: %v
-contexts:
-- context:
-    cluster: %v
-    user: %v
-  name: %v
-current-context: %v
-kind: Config
-preferences: {}
-users:
-- name: %v
-  user:
-    exec:
-      apiVersion: client.authentication.k8s.io/v1alpha1
-      command: aws
-      args:
-        - "eks"
-        - "get-token"
-        - "--cluster-name"
-        - "%v"
-      # Uncomment the following line to use an AWS profile with this kubeconfig
-      # env:
-      #   - name: AWS_PROFILE
-      #     value: "your-aws-profile"
-`
-	return fmt.Sprintf(kubeconfigTemplate, endpoint, caData, clusterName, clusterName, clusterName, clusterName, clusterName, clusterName, clusterName)
 }
