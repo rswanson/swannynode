@@ -1,0 +1,4 @@
+config:
+  aws:region: us-east-2
+  swannynode-cluster:vpcId:
+    secure: AAABAPKTJZeT+2DJakw4xuGp7girS2FByUJIdtZudSQ8Eef8T0QtzAtJzINtpOWTtB6FLLw=
