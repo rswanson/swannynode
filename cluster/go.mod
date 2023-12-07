@@ -1,4 +1,4 @@
-module swannynode-cluster/m/v2
+module cluster
 
 go 1.21.4
 

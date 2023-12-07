@@ -1,14 +1,20 @@
-package main
+package monitoring
 
 import (
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
+	storagev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/storage/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
+		// fetch the rethTargetIp from the stack config
+		cfg := config.New(ctx, "")
+		rethTargetIp := cfg.Require("rethTargetIp") // Assuming vpcId is a string
+
 		// Create a Kubernetes Namespace for Prometheus
 		ns, err := corev1.NewNamespace(ctx, "prometheus", &corev1.NamespaceArgs{
 			Metadata: &metav1.ObjectMetaArgs{
@@ -20,7 +26,8 @@ func main() {
 		}
 
 		// Define a label for selectors
-		appLabels := pulumi.StringMap{"app": pulumi.String("prometheus")}
+		appLabelPrometheus := pulumi.StringMap{"app": pulumi.String("prometheus")}
+		appLabelGrafana := pulumi.StringMap{"app": pulumi.String("grafana")}
 
 		// Create ConfigMap for Prometheus
 		prometheusConfig, err := corev1.NewConfigMap(ctx, "prometheus-config", &corev1.ConfigMapArgs{
@@ -38,8 +45,7 @@ scrape_configs:
       - targets: ['localhost:9090']
   - job_name: reth
     static_configs:
-      - targets: ['10.0.2.211:9091']
-`),
+      - targets: ['` + rethTargetIp + `']`),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
@@ -53,12 +59,12 @@ scrape_configs:
 			},
 			Spec: &appsv1.DeploymentSpecArgs{
 				Selector: &metav1.LabelSelectorArgs{
-					MatchLabels: appLabels,
+					MatchLabels: appLabelPrometheus,
 				},
 				Replicas: pulumi.Int(1),
 				Template: &corev1.PodTemplateSpecArgs{
 					Metadata: &metav1.ObjectMetaArgs{
-						Labels: appLabels,
+						Labels: appLabelPrometheus,
 					},
 					Spec: &corev1.PodSpecArgs{
 						Containers: corev1.ContainerArray{
@@ -101,7 +107,7 @@ scrape_configs:
 				Name:      pulumi.String("prometheus-service"),
 			},
 			Spec: &corev1.ServiceSpecArgs{
-				Selector: appLabels,
+				Selector: appLabelPrometheus,
 				Ports: corev1.ServicePortArray{
 					&corev1.ServicePortArgs{
 						Port:       pulumi.Int(9090),
@@ -114,6 +120,42 @@ scrape_configs:
 		if err != nil {
 			return err
 		}
+		// Create the ebs gp2 storage class
+		_, err = storagev1.NewStorageClass(ctx, "ebs-sc", &storagev1.StorageClassArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Name: pulumi.String("aws-gp2"), // Name of the StorageClass
+			},
+			Provisioner:          pulumi.String("ebs.csi.aws.com"), // Amazon EBS CSI driver
+			VolumeBindingMode:    pulumi.String("WaitForFirstConsumer"),
+			AllowVolumeExpansion: pulumi.Bool(true),       // Allow volume expansion
+			ReclaimPolicy:        pulumi.String("Delete"), // Automatically delete EBS volume when PVC is deleted
+			Parameters: pulumi.StringMap{
+				"type": pulumi.String("gp2"), // The type of EBS volume
+			},
+		})
+
+		if err != nil {
+			return err
+		}
+
+		// create a persistent volume claim with dynamic provisioning for grafana to use for storage
+		grafanaPvc, err := corev1.NewPersistentVolumeClaim(ctx, "grafana-pvc", &corev1.PersistentVolumeClaimArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Name: pulumi.String("grafana-pvc"), // Name of the PVC
+			},
+			Spec: &corev1.PersistentVolumeClaimSpecArgs{
+				AccessModes: pulumi.StringArray{pulumi.String("ReadWriteMany")}, // Access mode
+				Resources: corev1.ResourceRequirementsArgs{
+					Requests: pulumi.StringMap{
+						"storage": pulumi.String("5Gi"), // Request 5 GiB of space
+					},
+				},
+				StorageClassName: pulumi.String("aws-gp2"), // Use the 'aws-gp2' storage class
+			},
+		})
+		if err != nil {
+			return err
+		}
 
 		// Create a grafana Deployment
 		_, err = appsv1.NewDeployment(ctx, "grafana-deployment", &appsv1.DeploymentArgs{
@@ -122,12 +164,12 @@ scrape_configs:
 			},
 			Spec: &appsv1.DeploymentSpecArgs{
 				Selector: &metav1.LabelSelectorArgs{
-					MatchLabels: appLabels,
+					MatchLabels: appLabelGrafana,
 				},
 				Replicas: pulumi.Int(1),
 				Template: &corev1.PodTemplateSpecArgs{
 					Metadata: &metav1.ObjectMetaArgs{
-						Labels: appLabels,
+						Labels: appLabelGrafana,
 					},
 					Spec: &corev1.PodSpecArgs{
 						Containers: corev1.ContainerArray{
@@ -139,12 +181,26 @@ scrape_configs:
 										ContainerPort: pulumi.Int(3000),
 									},
 								},
+								VolumeMounts: corev1.VolumeMountArray{
+									&corev1.VolumeMountArgs{
+										Name:      pulumi.String("grafana-pv"),
+										MountPath: pulumi.String("/var/lib/grafana"),
+									},
+								},
+							},
+						},
+						Volumes: corev1.VolumeArray{
+							&corev1.VolumeArgs{
+								Name: pulumi.String("grafana-pv"),
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSourceArgs{
+									ClaimName: pulumi.String("grafana-pvc"),
+								},
 							},
 						},
 					},
 				},
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{ns}))
+		}, pulumi.DependsOn([]pulumi.Resource{ns, grafanaPvc}))
 		if err != nil {
 			return err
 		}
@@ -156,7 +212,7 @@ scrape_configs:
 				Name:      pulumi.String("grafana-service"),
 			},
 			Spec: &corev1.ServiceSpecArgs{
-				Selector: appLabels,
+				Selector: appLabelGrafana,
 				Ports: corev1.ServicePortArray{
 					&corev1.ServicePortArgs{
 						Port:       pulumi.Int(3000),
@@ -175,10 +231,10 @@ scrape_configs:
 			Metadata: &metav1.ObjectMetaArgs{
 				Namespace: ns.Metadata.Name(),
 				Name:      pulumi.String("prometheus-service-monitor"),
-				Labels:    appLabels,
+				Labels:    appLabelPrometheus,
 			},
 			Spec: &corev1.ServiceSpecArgs{
-				Selector: appLabels,
+				Selector: appLabelPrometheus,
 				Ports: corev1.ServicePortArray{
 					&corev1.ServicePortArgs{
 						Port: pulumi.Int(9090),
@@ -196,10 +252,10 @@ scrape_configs:
 			Metadata: &metav1.ObjectMetaArgs{
 				Namespace: ns.Metadata.Name(),
 				Name:      pulumi.String("grafana-service-monitor"),
-				Labels:    appLabels,
+				Labels:    appLabelGrafana,
 			},
 			Spec: &corev1.ServiceSpecArgs{
-				Selector: appLabels,
+				Selector: appLabelGrafana,
 				Ports: corev1.ServicePortArray{
 					&corev1.ServicePortArgs{
 						Port: pulumi.Int(3000),

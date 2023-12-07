@@ -1,4 +1,4 @@
-package main
+package cluster
 
 import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
