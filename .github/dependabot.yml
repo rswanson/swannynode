@@ -5,11 +5,11 @@
 
 version: 2
 updates:
-  - package-ecosystem: "go" # See documentation for possible values
+  - package-ecosystem: "gomod" # See documentation for possible values
     directory: "/cluster" # Location of package manifests
     schedule:
       interval: "daily"
-  - package-ecosystem: "go" # See documentation for possible values
+  - package-ecosystem: "gomod" # See documentation for possible values
     directory: "/monitoring" # Location of package manifests
     schedule:
       interval: "daily"
