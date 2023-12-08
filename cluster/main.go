@@ -15,6 +15,12 @@ func main() {
 		// Load the configuration.
 		cfg := config.New(ctx, "")
 		vpcId := cfg.Require("vpcId") // Assuming vpcId is a string
+		oidc := pulumi.String(cfg.Require("oidcUrl"))
+		oidcWithProtocol := pulumi.String("https://" + oidc)
+		sub := pulumi.String(oidc + ":sub")
+		aud := pulumi.String(oidc + ":aud")
+		arnAccountSection := pulumi.String(cfg.Require("arnAccountSection"))
+		oidcThumbprint := pulumi.String(cfg.Require("oidcThumbprint"))
 
 		// Get the list of subnet IDs in the VPC.
 		subnets, err := ec2.GetSubnets(ctx, &ec2.GetSubnetsArgs{
@@ -33,13 +39,13 @@ func main() {
 
 		// Create OIDC provider for the cluster.
 		_, err = iam.NewOpenIdConnectProvider(ctx, "oidcProvider", &iam.OpenIdConnectProviderArgs{
-			Url: pulumi.String("https://oidc.eks.us-east-2.amazonaws.com/id/F97321D8BD09162F8A200149C96EC391"),
+			Url: oidcWithProtocol,
 			ClientIdLists: pulumi.StringArray{
 				pulumi.String("sts.amazonaws.com"),
 				pulumi.String("system:serviceaccount:kube-system:ebs-csi-controller-sa"),
 			},
 			ThumbprintLists: pulumi.StringArray{
-				pulumi.String("50879EA7F7C29DD615269E559FB061B46BDD3DBE"),
+				oidcThumbprint,
 			},
 		})
 		if err != nil {
@@ -86,14 +92,17 @@ func main() {
 		}
 
 		// OIDC provider association for cluster auth with role bindings
-		oidc, err := eks.NewIdentityProviderConfig(ctx, "oidcProviderConfig", &eks.IdentityProviderConfigArgs{
+		oidcProvider, err := eks.NewIdentityProviderConfig(ctx, "oidcProviderConfig", &eks.IdentityProviderConfigArgs{
 			ClusterName: cluster.Name,
 			Oidc: &eks.IdentityProviderConfigOidcArgs{
 				ClientId:                   pulumi.String("sts.amazonaws.com"),
 				IdentityProviderConfigName: pulumi.String("oidcProviderConfig"),
-				IssuerUrl:                  pulumi.String("https://oidc.eks.us-east-2.amazonaws.com/id/F97321D8BD09162F8A200149C96EC391"),
+				IssuerUrl:                  oidcWithProtocol,
 			},
 		})
+		if err != nil {
+			return err
+		}
 
 		// Create the IAM role for the nodegroup.
 		nodegroupRole, err := iam.NewRole(ctx, "nodeGroupRole", &iam.RoleArgs{
@@ -166,13 +175,13 @@ func main() {
 				  {
 					"Effect": "Allow",
 					"Principal": {
-					  "Federated": "arn:aws:iam::837158543833:oidc-provider/oidc.eks.us-east-2.amazonaws.com/id/F97321D8BD09162F8A200149C96EC391"
+					  "Federated": "` + arnAccountSection + `:oidc-provider/` + oidc + `"
 					},
 					"Action": "sts:AssumeRoleWithWebIdentity",
 					"Condition": {
 					  "StringEquals": {
-						"oidc.eks.us-east-2.amazonaws.com/id/F97321D8BD09162F8A200149C96EC391:aud": "sts.amazonaws.com",
-						"oidc.eks.us-east-2.amazonaws.com/id/F97321D8BD09162F8A200149C96EC391:sub": "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+						"` + aud + `": "sts.amazonaws.com",
+						"` + sub + `": "system:serviceaccount:kube-system:ebs-csi-controller-sa"
 					  }
 					}
 				  }
@@ -239,7 +248,7 @@ func main() {
 			ServiceAccountRoleArn:    serviceAccountRole.Arn,
 			ResolveConflictsOnUpdate: pulumi.String("PRESERVE"),
 			ResolveConflictsOnCreate: pulumi.String("NONE"),
-		}, pulumi.DependsOn([]pulumi.Resource{oidc}))
+		}, pulumi.DependsOn([]pulumi.Resource{oidcProvider}))
 		if err != nil {
 			return err
 		}
