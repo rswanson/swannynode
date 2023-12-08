@@ -1,4 +1,4 @@
-module monitoring
+module main
 
 go 1.21
 

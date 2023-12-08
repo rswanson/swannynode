@@ -1,4 +1,4 @@
-package monitoring
+package main
 
 import (
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
@@ -139,12 +139,13 @@ scrape_configs:
 		}
 
 		// create a persistent volume claim with dynamic provisioning for grafana to use for storage
-		grafanaPvc, err := corev1.NewPersistentVolumeClaim(ctx, "grafana-pvc", &corev1.PersistentVolumeClaimArgs{
+		_, err = corev1.NewPersistentVolumeClaim(ctx, "grafana-pvc", &corev1.PersistentVolumeClaimArgs{
 			Metadata: &metav1.ObjectMetaArgs{
-				Name: pulumi.String("grafana-pvc"), // Name of the PVC
+				Name:      pulumi.String("grafana-pvc"), // Name of the PVC
+				Namespace: pulumi.String("prometheus"),  // Namespace to create the PVC in
 			},
 			Spec: &corev1.PersistentVolumeClaimSpecArgs{
-				AccessModes: pulumi.StringArray{pulumi.String("ReadWriteMany")}, // Access mode
+				AccessModes: pulumi.StringArray{pulumi.String("ReadWriteOnce")}, // ReadWriteOnce is the only supported mode for EBS
 				Resources: corev1.ResourceRequirementsArgs{
 					Requests: pulumi.StringMap{
 						"storage": pulumi.String("5Gi"), // Request 5 GiB of space
@@ -158,7 +159,7 @@ scrape_configs:
 		}
 
 		// Create a grafana Deployment
-		_, err = appsv1.NewDeployment(ctx, "grafana-deployment", &appsv1.DeploymentArgs{
+		grafana, err := appsv1.NewDeployment(ctx, "grafana-deployment", &appsv1.DeploymentArgs{
 			Metadata: &metav1.ObjectMetaArgs{
 				Namespace: ns.Metadata.Name(),
 			},
@@ -174,8 +175,9 @@ scrape_configs:
 					Spec: &corev1.PodSpecArgs{
 						Containers: corev1.ContainerArray{
 							&corev1.ContainerArgs{
-								Name:  pulumi.String("grafana"),
-								Image: pulumi.String("grafana/grafana"),
+								Name:            pulumi.String("grafana"),
+								Image:           pulumi.String("grafana/grafana-oss:latest"),
+								ImagePullPolicy: pulumi.String("Always"),
 								Ports: corev1.ContainerPortArray{
 									&corev1.ContainerPortArgs{
 										ContainerPort: pulumi.Int(3000),
@@ -197,10 +199,17 @@ scrape_configs:
 								},
 							},
 						},
+						SecurityContext: &corev1.PodSecurityContextArgs{
+							FsGroup: pulumi.Int(472),
+							SupplementalGroups: pulumi.IntArray{
+								pulumi.Int(472),
+								pulumi.Int(0),
+							},
+						},
 					},
 				},
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{ns, grafanaPvc}))
+		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
 			return err
 		}
@@ -221,7 +230,7 @@ scrape_configs:
 				},
 				Type: pulumi.String("ClusterIP"),
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{ns}))
+		}, pulumi.DependsOn([]pulumi.Resource{ns, grafana}))
 		if err != nil {
 			return err
 		}
@@ -263,7 +272,7 @@ scrape_configs:
 				},
 				Type: pulumi.String("ClusterIP"),
 			},
-		}, pulumi.DependsOn([]pulumi.Resource{ns}))
+		}, pulumi.DependsOn([]pulumi.Resource{ns, grafana}))
 		if err != nil {
 			return err
 		}
