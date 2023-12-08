@@ -4,6 +4,8 @@ import (
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/eks"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
+	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
+	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -13,6 +15,12 @@ func main() {
 		// Load the configuration.
 		cfg := config.New(ctx, "")
 		vpcId := cfg.Require("vpcId") // Assuming vpcId is a string
+		oidc := pulumi.String(cfg.Require("oidcUrl"))
+		oidcWithProtocol := pulumi.String("https://" + oidc)
+		sub := pulumi.String(oidc + ":sub")
+		aud := pulumi.String(oidc + ":aud")
+		arnAccountSection := pulumi.String(cfg.Require("arnAccountSection"))
+		oidcThumbprint := pulumi.String(cfg.Require("oidcThumbprint"))
 
 		// Get the list of subnet IDs in the VPC.
 		subnets, err := ec2.GetSubnets(ctx, &ec2.GetSubnetsArgs{
@@ -28,6 +36,21 @@ func main() {
 		}
 
 		subnetIds := subnets.Ids
+
+		// Create OIDC provider for the cluster.
+		_, err = iam.NewOpenIdConnectProvider(ctx, "oidcProvider", &iam.OpenIdConnectProviderArgs{
+			Url: oidcWithProtocol,
+			ClientIdLists: pulumi.StringArray{
+				pulumi.String("sts.amazonaws.com"),
+				pulumi.String("system:serviceaccount:kube-system:ebs-csi-controller-sa"),
+			},
+			ThumbprintLists: pulumi.StringArray{
+				oidcThumbprint,
+			},
+		})
+		if err != nil {
+			return err
+		}
 
 		// Create an IAM role for the EKS cluster.
 		eksRole, err := iam.NewRole(ctx, "eksRole", &iam.RoleArgs{
@@ -63,6 +86,19 @@ func main() {
 				SubnetIds: pulumi.ToStringArray(subnetIds),
 			},
 			RoleArn: eksRole.Arn,
+		})
+		if err != nil {
+			return err
+		}
+
+		// OIDC provider association for cluster auth with role bindings
+		oidcProvider, err := eks.NewIdentityProviderConfig(ctx, "oidcProviderConfig", &eks.IdentityProviderConfigArgs{
+			ClusterName: cluster.Name,
+			Oidc: &eks.IdentityProviderConfigOidcArgs{
+				ClientId:                   pulumi.String("sts.amazonaws.com"),
+				IdentityProviderConfigName: pulumi.String("oidcProviderConfig"),
+				IssuerUrl:                  oidcWithProtocol,
+			},
 		})
 		if err != nil {
 			return err
@@ -132,26 +168,46 @@ func main() {
 			return err
 		}
 
-		serviceAccountRole, err := iam.NewRole(ctx, "ebs-csi-driver-sa", &iam.RoleArgs{
+		serviceAccountRole, err := iam.NewRole(ctx, "ebs-csi-driver-sa-role", &iam.RoleArgs{
 			AssumeRolePolicy: pulumi.String(`{
-						"Version": "2008-10-17",
-						"Statement": [{
-							"Sid": "",
-							"Effect": "Allow",
-							"Principal": {
-								"Service": "eks.amazonaws.com"
-							},
-							"Action": "sts:AssumeRole"
-						}]
-					}`),
+				"Version": "2012-10-17",
+				"Statement": [
+				  {
+					"Effect": "Allow",
+					"Principal": {
+					  "Federated": "` + arnAccountSection + `:oidc-provider/` + oidc + `"
+					},
+					"Action": "sts:AssumeRoleWithWebIdentity",
+					"Condition": {
+					  "StringEquals": {
+						"` + aud + `": "sts.amazonaws.com",
+						"` + sub + `": "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+					  }
+					}
+				  }
+				]
+			  }
+			  `),
 		})
 		if err != nil {
 			return err
 		}
 
-		_, err = iam.NewRolePolicyAttachment(ctx, "ebs-csi-driver-sa", &iam.RolePolicyAttachmentArgs{
-			Role:      nodegroupRole.Name,
+		// Attach the AmazonEBSCSIDriverPolicy managed policy to the role.
+		_, err = iam.NewRolePolicyAttachment(ctx, "ebs-csi-driver-sa-ra", &iam.RolePolicyAttachmentArgs{
+			Role:      serviceAccountRole.Name,
 			PolicyArn: pulumi.String("arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create a ServiceAccount for the EBS CSI driver.
+		_, err = corev1.NewServiceAccount(ctx, "ebs-csi-driver-sa", &corev1.ServiceAccountArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Name:      pulumi.String("ebs-csi-controller-sa"),
+				Namespace: pulumi.String("kube-system"),
+			},
 		})
 		if err != nil {
 			return err
@@ -192,7 +248,7 @@ func main() {
 			ServiceAccountRoleArn:    serviceAccountRole.Arn,
 			ResolveConflictsOnUpdate: pulumi.String("PRESERVE"),
 			ResolveConflictsOnCreate: pulumi.String("NONE"),
-		})
+		}, pulumi.DependsOn([]pulumi.Resource{oidcProvider}))
 		if err != nil {
 			return err
 		}
