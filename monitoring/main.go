@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
@@ -14,6 +16,24 @@ func main() {
 		// fetch the rethTargetIp from the stack config
 		cfg := config.New(ctx, "")
 		rethTargetIp := cfg.Require("rethTargetIp") // Assuming vpcId is a string
+		rethDashboard, err := os.ReadFile("dashboards/reth-overview.json")
+		if err != nil {
+			return err // Handle the error according to your needs.
+		}
+		rethDashboardJsonData := make(map[string]string)
+		rethDashboardJsonData["reth-overview.json"] = string(rethDashboard)
+		rethDashboardConfig := pulumi.String(`
+apiVersion: 1
+
+
+providers:
+  - name: dashboards
+    type: file
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/dashboards
+      foldersFromFilesStructure: true
+`)
 
 		// Create a Kubernetes Namespace for Prometheus
 		ns, err := corev1.NewNamespace(ctx, "prometheus", &corev1.NamespaceArgs{
@@ -158,6 +178,86 @@ scrape_configs:
 			return err
 		}
 
+		// create configmap for grafana
+		grafanaConfig, err := corev1.NewConfigMap(ctx, "grafana-config", &corev1.ConfigMapArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Namespace: ns.Metadata.Name(),
+				Name:      pulumi.String("grafana-config"),
+			},
+			Data: pulumi.StringMap{
+				"grafana.ini": pulumi.String(`
+[paths]
+data = /var/lib/grafana/data
+logs = /var/log/grafana
+plugins = /var/lib/grafana/plugins
+[server]
+http_port = 3000
+[database]
+type = sqlite3
+path = grafana.db
+[session]
+provider = file
+provider_config = sessions
+[analytics]
+reporting_enabled = false
+check_for_updates = false
+`),
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{ns}))
+		if err != nil {
+			return err
+		}
+
+		grafanaPrometheusDatasourceConfig, err := corev1.NewConfigMap(ctx, "grafana-prometheus-datasource-config", &corev1.ConfigMapArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Namespace: ns.Metadata.Name(),
+				Name:      pulumi.String("grafana-prometheus-datasource-config"),
+			},
+			Data: pulumi.StringMap{
+				"prometheus.yaml": pulumi.String(`
+apiVersion: 1
+
+datasources:
+- name: Prometheus
+  type: prometheus
+  access: proxy
+  orgId: 1
+  url: http://prometheus-service:9090
+  isDefault: true
+  version: 1
+  editable: true
+`)},
+		}, pulumi.DependsOn([]pulumi.Resource{ns}))
+		if err != nil {
+			return err
+		}
+
+		grafanaRethDashboardConfig, err := corev1.NewConfigMap(ctx, "grafana-reth-dashboard-config", &corev1.ConfigMapArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Namespace: ns.Metadata.Name(),
+				Name:      pulumi.String("grafana-reth-dashboard-config"),
+			},
+			Data: pulumi.StringMap{
+				"dashboard.yaml": rethDashboardConfig,
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{ns}))
+		if err != nil {
+			return err
+		}
+
+		grafanaDashboardConfigMap, err := corev1.NewConfigMap(ctx, "grafana-dashboard-config", &corev1.ConfigMapArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Namespace: ns.Metadata.Name(),
+				Name:      pulumi.String("grafana-dashboard-config"),
+			},
+			Data: pulumi.StringMap{
+				"reth-overview.json": pulumi.String(rethDashboard),
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{ns}))
+		if err != nil {
+			return err
+		}
+
 		// Create a grafana Deployment
 		grafana, err := appsv1.NewDeployment(ctx, "grafana-deployment", &appsv1.DeploymentArgs{
 			Metadata: &metav1.ObjectMetaArgs{
@@ -188,6 +288,22 @@ scrape_configs:
 										Name:      pulumi.String("grafana-pv"),
 										MountPath: pulumi.String("/var/lib/grafana"),
 									},
+									&corev1.VolumeMountArgs{
+										Name:      pulumi.String("grafana-config"),
+										MountPath: pulumi.String("/etc/grafana"),
+									},
+									&corev1.VolumeMountArgs{
+										Name:      pulumi.String("grafana-prometheus-datasource-config"),
+										MountPath: pulumi.String("/etc/grafana/provisioning/datasources"),
+									},
+									&corev1.VolumeMountArgs{
+										Name:      pulumi.String("grafana-reth-dashboard-json"),
+										MountPath: pulumi.String("/etc/grafana/provisioning/dashboards"),
+									},
+									&corev1.VolumeMountArgs{
+										Name:      pulumi.String("grafana-dashboard-config"),
+										MountPath: pulumi.String("/etc/dashboards"),
+									},
 								},
 							},
 						},
@@ -196,6 +312,30 @@ scrape_configs:
 								Name: pulumi.String("grafana-pv"),
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSourceArgs{
 									ClaimName: pulumi.String("grafana-pvc"),
+								},
+							},
+							&corev1.VolumeArgs{
+								Name: pulumi.String("grafana-config"),
+								ConfigMap: &corev1.ConfigMapVolumeSourceArgs{
+									Name: grafanaConfig.Metadata.Name(),
+								},
+							},
+							&corev1.VolumeArgs{
+								Name: pulumi.String("grafana-prometheus-datasource-config"),
+								ConfigMap: &corev1.ConfigMapVolumeSourceArgs{
+									Name: grafanaPrometheusDatasourceConfig.Metadata.Name(),
+								},
+							},
+							&corev1.VolumeArgs{
+								Name: pulumi.String("grafana-reth-dashboard-json"),
+								ConfigMap: &corev1.ConfigMapVolumeSourceArgs{
+									Name: grafanaRethDashboardConfig.Metadata.Name(),
+								},
+							},
+							&corev1.VolumeArgs{
+								Name: pulumi.String("grafana-dashboard-config"),
+								ConfigMap: &corev1.ConfigMapVolumeSourceArgs{
+									Name: grafanaDashboardConfigMap.Metadata.Name(),
 								},
 							},
 						},
