@@ -6,6 +6,7 @@ import (
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
+	networkingv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/networking/v1"
 	storagev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/storage/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -362,13 +363,13 @@ datasources:
 			},
 			Spec: &corev1.ServiceSpecArgs{
 				Selector: appLabelGrafana,
+				Type:     pulumi.String("LoadBalancer"),
 				Ports: corev1.ServicePortArray{
 					&corev1.ServicePortArgs{
 						Port:       pulumi.Int(3000),
 						TargetPort: pulumi.Int(3000),
 					},
 				},
-				Type: pulumi.String("ClusterIP"),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns, grafana}))
 		if err != nil {
@@ -413,6 +414,40 @@ datasources:
 				Type: pulumi.String("ClusterIP"),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns, grafana}))
+		if err != nil {
+			return err
+		}
+
+		// create an ingress for grafana
+		_, err = networkingv1.NewIngress(ctx, "grafana-ingress", &networkingv1.IngressArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Name:      pulumi.String("grafana-ingress"),
+				Namespace: pulumi.String("prometheus"),
+			},
+			Spec: &networkingv1.IngressSpecArgs{
+				Rules: networkingv1.IngressRuleArray{
+					&networkingv1.IngressRuleArgs{
+						Host: pulumi.String("grafana.swanny.wtf"),
+						Http: &networkingv1.HTTPIngressRuleValueArgs{
+							Paths: networkingv1.HTTPIngressPathArray{
+								&networkingv1.HTTPIngressPathArgs{
+									Path:     pulumi.String("/"),
+									PathType: pulumi.String("Prefix"),
+									Backend: &networkingv1.IngressBackendArgs{
+										Service: &networkingv1.IngressServiceBackendArgs{
+											Name: pulumi.String("grafana-service"),
+											Port: networkingv1.ServiceBackendPortArgs{
+												Number: pulumi.Int(3000),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		})
 		if err != nil {
 			return err
 		}
