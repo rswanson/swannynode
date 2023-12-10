@@ -3,10 +3,10 @@ package main
 import (
 	"os"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/route53"
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
-	networkingv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/networking/v1"
 	storagev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/storage/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -17,24 +17,17 @@ func main() {
 		// fetch the rethTargetIp from the stack config
 		cfg := config.New(ctx, "")
 		rethTargetIp := cfg.Require("rethTargetIp") // Assuming vpcId is a string
-		rethDashboard, err := os.ReadFile("dashboards/reth-overview.json")
+		recordName := cfg.Require("recordName")
+
+		// dashboard vars
+		rethDashboard, err := os.ReadFile("config/grafana/dashboards/reth-overview.json")
 		if err != nil {
 			return err // Handle the error according to your needs.
 		}
-		rethDashboardJsonData := make(map[string]string)
-		rethDashboardJsonData["reth-overview.json"] = string(rethDashboard)
-		rethDashboardConfig := pulumi.String(`
-apiVersion: 1
-
-
-providers:
-  - name: dashboards
-    type: file
-    updateIntervalSeconds: 30
-    options:
-      path: /etc/dashboards
-      foldersFromFilesStructure: true
-`)
+		rethDashboardConfig, err := os.ReadFile("config/grafana/dashboards/dashboard-config.yaml")
+		if err != nil {
+			return err // Handle the error according to your needs.
+		}
 
 		// Create a Kubernetes Namespace for Prometheus
 		ns, err := corev1.NewNamespace(ctx, "prometheus", &corev1.NamespaceArgs{
@@ -141,6 +134,7 @@ scrape_configs:
 		if err != nil {
 			return err
 		}
+
 		// Create the ebs gp2 storage class
 		_, err = storagev1.NewStorageClass(ctx, "ebs-sc", &storagev1.StorageClassArgs{
 			Metadata: &metav1.ObjectMetaArgs{
@@ -178,6 +172,11 @@ scrape_configs:
 		if err != nil {
 			return err
 		}
+		//read grafana.ini config file into var
+		grafanaConfigFile, err := os.ReadFile("config/grafana/grafana.ini")
+		if err != nil {
+			return err // Handle the error according to your needs.
+		}
 
 		// create configmap for grafana
 		grafanaConfig, err := corev1.NewConfigMap(ctx, "grafana-config", &corev1.ConfigMapArgs{
@@ -186,27 +185,17 @@ scrape_configs:
 				Name:      pulumi.String("grafana-config"),
 			},
 			Data: pulumi.StringMap{
-				"grafana.ini": pulumi.String(`
-[paths]
-data = /var/lib/grafana/data
-logs = /var/log/grafana
-plugins = /var/lib/grafana/plugins
-[server]
-http_port = 3000
-[database]
-type = sqlite3
-path = grafana.db
-[session]
-provider = file
-provider_config = sessions
-[analytics]
-reporting_enabled = false
-check_for_updates = false
-`),
+				"grafana.ini": pulumi.String(grafanaConfigFile),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
 			return err
+		}
+
+		// read prometheus.yaml from file
+		grafanaPrometheusDatasourceConfigFile, err := os.ReadFile("config/grafana/prometheus.yaml")
+		if err != nil {
+			return err // Handle the error according to your needs.
 		}
 
 		grafanaPrometheusDatasourceConfig, err := corev1.NewConfigMap(ctx, "grafana-prometheus-datasource-config", &corev1.ConfigMapArgs{
@@ -215,19 +204,8 @@ check_for_updates = false
 				Name:      pulumi.String("grafana-prometheus-datasource-config"),
 			},
 			Data: pulumi.StringMap{
-				"prometheus.yaml": pulumi.String(`
-apiVersion: 1
-
-datasources:
-- name: Prometheus
-  type: prometheus
-  access: proxy
-  orgId: 1
-  url: http://prometheus-service:9090
-  isDefault: true
-  version: 1
-  editable: true
-`)},
+				"prometheus.yaml": pulumi.String(grafanaPrometheusDatasourceConfigFile),
+			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
 			return err
@@ -239,7 +217,7 @@ datasources:
 				Name:      pulumi.String("grafana-reth-dashboard-config"),
 			},
 			Data: pulumi.StringMap{
-				"dashboard.yaml": rethDashboardConfig,
+				"dashboard.yaml": pulumi.String(rethDashboardConfig),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
@@ -356,7 +334,7 @@ datasources:
 		}
 
 		// Create a Service to expose grafana Deployment
-		_, err = corev1.NewService(ctx, "grafana-service", &corev1.ServiceArgs{
+		grafanaService, err := corev1.NewService(ctx, "grafana-service", &corev1.ServiceArgs{
 			Metadata: &metav1.ObjectMetaArgs{
 				Namespace: ns.Metadata.Name(),
 				Name:      pulumi.String("grafana-service"),
@@ -366,7 +344,7 @@ datasources:
 				Type:     pulumi.String("LoadBalancer"),
 				Ports: corev1.ServicePortArray{
 					&corev1.ServicePortArgs{
-						Port:       pulumi.Int(3000),
+						Port:       pulumi.Int(80),
 						TargetPort: pulumi.Int(3000),
 					},
 				},
@@ -418,35 +396,22 @@ datasources:
 			return err
 		}
 
-		// create an ingress for grafana
-		_, err = networkingv1.NewIngress(ctx, "grafana-ingress", &networkingv1.IngressArgs{
-			Metadata: &metav1.ObjectMetaArgs{
-				Name:      pulumi.String("grafana-ingress"),
-				Namespace: pulumi.String("prometheus"),
+		// variables for route53 record
+		recordUrl := grafanaService.Status.ApplyT(func(status *corev1.ServiceStatus) string {
+			return *status.LoadBalancer.Ingress[0].Hostname
+		}).(pulumi.StringOutput)
+
+		zoneId := cfg.Require("zoneId")
+
+		// create route53 record for grafana
+		_, err = route53.NewRecord(ctx, "grafana-route53", &route53.RecordArgs{
+			Name: pulumi.String(recordName),
+			Records: pulumi.StringArray{
+				recordUrl,
 			},
-			Spec: &networkingv1.IngressSpecArgs{
-				Rules: networkingv1.IngressRuleArray{
-					&networkingv1.IngressRuleArgs{
-						Host: pulumi.String("grafana.swanny.wtf"),
-						Http: &networkingv1.HTTPIngressRuleValueArgs{
-							Paths: networkingv1.HTTPIngressPathArray{
-								&networkingv1.HTTPIngressPathArgs{
-									Path:     pulumi.String("/"),
-									PathType: pulumi.String("Prefix"),
-									Backend: &networkingv1.IngressBackendArgs{
-										Service: &networkingv1.IngressServiceBackendArgs{
-											Name: pulumi.String("grafana-service"),
-											Port: networkingv1.ServiceBackendPortArgs{
-												Number: pulumi.Int(3000),
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
+			Ttl:    pulumi.Int(300),
+			Type:   pulumi.String("CNAME"),
+			ZoneId: pulumi.String(zoneId),
 		})
 		if err != nil {
 			return err

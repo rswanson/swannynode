@@ -1,3 +1,7 @@
 config:
+  monitoring:recordName:
+    secure: AAABAAWNmcdMElZScN7rLn0cK9l57od8EfvdtYXsc1JXFVAmpILdkmwrzY7oRk1hJ/s=
   monitoring:rethTargetIp:
     secure: AAABAHNLaEQDDxnDRIHiM8VAa7DkrH3HtxZCrF1wpE7WzdfxNFXCu69JbdREH6M=
+  monitoring:zoneId:
+    secure: AAABAGVyR8ZeYYeucCiKq70DcoB3320d/St+aRTesOsfEd0InRhOKeIu0Y5TyDvhxLe5Dso=
