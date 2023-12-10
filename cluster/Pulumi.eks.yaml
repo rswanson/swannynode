@@ -6,5 +6,7 @@ config:
     secure: AAABADLMH/wxHnx1ZQiYFSvVLmN35TzBcceEXJCbK4qLCrY/EGoK12Ph2v9wPTNm2gFUITEvLzh4MAaclwtNSkJMPMlcV9WP
   swannynode-cluster:oidcUrl:
     secure: AAABAD6dMJ2BedoVlXmzscV/6v6QFcfC0hlqjFpZgTrQL5VA4YUKl8IJmg9x+ASuqBH+2bZXm1Vcbjd1HIxxwpiGpjE0d6d3J2e0Pd/zhsPobdCFjn0C39m0jGyl+xg8NhOd/w==
+  swannynode-cluster:region:
+    secure: AAABAHsufjnNfzQDg1jkV/ym2i0YfTckK9ABuXr0+tMEWUvX0vKK4w4=
   swannynode-cluster:vpcId:
     secure: AAABAPKTJZeT+2DJakw4xuGp7girS2FByUJIdtZudSQ8Eef8T0QtzAtJzINtpOWTtB6FLLw=
