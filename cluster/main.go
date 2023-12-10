@@ -1,10 +1,13 @@
 package main
 
 import (
+	"os"
+
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/ec2"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/eks"
 	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/iam"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
+	helm "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/helm/v3"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -25,7 +28,7 @@ func main() {
 		// Get the list of subnet IDs in the VPC.
 		subnets, err := ec2.GetSubnets(ctx, &ec2.GetSubnetsArgs{
 			Filters: []ec2.GetSubnetsFilter{
-				ec2.GetSubnetsFilter{
+				{
 					Name:   "vpc-id",
 					Values: []string{vpcId},
 				},
@@ -53,18 +56,13 @@ func main() {
 		}
 
 		// Create an IAM role for the EKS cluster.
+		eksAssumeRolePolicy, err := os.ReadFile("config/eks/assume_role_policy.json")
+		if err != nil {
+			return err
+		}
+
 		eksRole, err := iam.NewRole(ctx, "eksRole", &iam.RoleArgs{
-			AssumeRolePolicy: pulumi.String(`{
-				"Version": "2008-10-17",
-				"Statement": [{
-					"Sid": "",
-					"Effect": "Allow",
-					"Principal": {
-						"Service": "eks.amazonaws.com"
-					},
-					"Action": "sts:AssumeRole"
-				}]
-			}`),
+			AssumeRolePolicy: pulumi.String(eksAssumeRolePolicy),
 		})
 		if err != nil {
 			return err
@@ -105,18 +103,13 @@ func main() {
 		}
 
 		// Create the IAM role for the nodegroup.
+		ec2AssumeRolePolicy, err := os.ReadFile("config/ec2/assume_role_policy.json")
+		if err != nil {
+			return err
+		}
+
 		nodegroupRole, err := iam.NewRole(ctx, "nodeGroupRole", &iam.RoleArgs{
-			AssumeRolePolicy: pulumi.String(`{
-				"Version": "2008-10-17",
-				"Statement": [{
-					"Sid": "",
-					"Effect": "Allow",
-					"Principal": {
-						"Service": "ec2.amazonaws.com"
-					},
-					"Action": "sts:AssumeRole"
-				}]
-			}`),
+			AssumeRolePolicy: pulumi.String(ec2AssumeRolePolicy),
 		})
 		if err != nil {
 			return err
@@ -249,6 +242,87 @@ func main() {
 			ResolveConflictsOnUpdate: pulumi.String("PRESERVE"),
 			ResolveConflictsOnCreate: pulumi.String("NONE"),
 		}, pulumi.DependsOn([]pulumi.Resource{oidcProvider}))
+		if err != nil {
+			return err
+		}
+
+		// Create IAM policy from json file config/aws-lb-controller/iam-policy.json
+		iamPolicyFile, err := os.ReadFile("config/aws-lb-controller/iam_policy.json")
+		if err != nil {
+			return err
+		}
+
+		iamPolicy, err := iam.NewPolicy(ctx, "aws-lb-controller-policy", &iam.PolicyArgs{
+			Description: pulumi.String("Policy for AWS Load Balancer Controller"),
+			Policy:      pulumi.String(iamPolicyFile),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create IAM role for AWS Load Balancer Controller
+		awsLbControllerRole, err := iam.NewRole(ctx, "aws-lb-controller-role", &iam.RoleArgs{
+			AssumeRolePolicy: pulumi.String(`{
+				"Version": "2012-10-17",
+				"Statement": [
+				  {
+					"Effect": "Allow",
+					"Principal": {
+					  "Federated": "` + arnAccountSection + `:oidc-provider/` + oidc + `"
+					},
+					"Action": "sts:AssumeRoleWithWebIdentity",
+					"Condition": {
+					  "StringEquals": {
+						"` + aud + `": "sts.amazonaws.com",
+						"` + sub + `": "system:serviceaccount:kube-system:aws-load-balancer-controller"
+					  }
+					}
+				  }
+				]
+			  }
+			  `),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Attach the AWSLoadBalancerControllerIAMPolicy managed policy to the role.
+		_, err = iam.NewRolePolicyAttachment(ctx, "aws-lb-controller-role-policy", &iam.RolePolicyAttachmentArgs{
+			Role:      awsLbControllerRole.Name,
+			PolicyArn: iamPolicy.Arn,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Create a ServiceAccount for the AWS Load Balancer Controller.
+		_, err = corev1.NewServiceAccount(ctx, "aws-lb-controller-sa", &corev1.ServiceAccountArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Name:      pulumi.String("aws-load-balancer-controller"),
+				Namespace: pulumi.String("kube-system"),
+			},
+		})
+		if err != nil {
+			return err
+		}
+
+		// Install the AWS Load Balancer Controller Helm chart.
+		_, err = helm.NewChart(ctx, "aws-lb-controller", helm.ChartArgs{
+			Chart:     pulumi.String("aws-load-balancer-controller"),
+			Namespace: pulumi.String("kube-system"),
+			FetchArgs: &helm.FetchArgs{
+				Repo: pulumi.String("https://aws.github.io/eks-charts"),
+			},
+			Values: pulumi.Map{
+				"clusterName": cluster.Name,
+				"region":      pulumi.String(cfg.Require("region")),
+				"vpcId":       pulumi.String(vpcId),
+				"serviceAccount": pulumi.Map{
+					"create": pulumi.Bool(false),
+					"name":   pulumi.String("aws-load-balancer-controller"),
+				},
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{awsLbControllerRole}))
 		if err != nil {
 			return err
 		}
