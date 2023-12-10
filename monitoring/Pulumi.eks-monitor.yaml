@@ -1,3 +1,9 @@
 config:
+  monitoring:grafanaTlsCertId:
+    secure: AAABANJvGYcMpNsffnnTn/41jfqTbQVOferf0+r0+Gstko4jjq8yod+4dVozADZzi1cF0xuuy4sgI27SGewysJoo4uh3VLHvsAaCJjMRygHq5V5o4s19QKmx8RrWKFYpYBggsTrJBKz/4XqlBr1/4dnAgA==
+  monitoring:recordName:
+    secure: AAABAAWNmcdMElZScN7rLn0cK9l57od8EfvdtYXsc1JXFVAmpILdkmwrzY7oRk1hJ/s=
   monitoring:rethTargetIp:
     secure: AAABAHNLaEQDDxnDRIHiM8VAa7DkrH3HtxZCrF1wpE7WzdfxNFXCu69JbdREH6M=
+  monitoring:zoneId:
+    secure: AAABAGVyR8ZeYYeucCiKq70DcoB3320d/St+aRTesOsfEd0InRhOKeIu0Y5TyDvhxLe5Dso=

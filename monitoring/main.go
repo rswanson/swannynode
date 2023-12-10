@@ -1,11 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
+	"github.com/pulumi/pulumi-aws/sdk/v6/go/aws/route53"
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
+	networkingv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/networking/v1"
 	storagev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/storage/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -16,29 +19,22 @@ func main() {
 		// fetch the rethTargetIp from the stack config
 		cfg := config.New(ctx, "")
 		rethTargetIp := cfg.Require("rethTargetIp") // Assuming vpcId is a string
-		rethDashboard, err := os.ReadFile("dashboards/reth-overview.json")
+		recordName := cfg.Require("recordName")
+
+		// dashboard vars
+		rethDashboard, err := os.ReadFile("config/grafana/dashboards/reth-overview.json")
 		if err != nil {
 			return err // Handle the error according to your needs.
 		}
-		rethDashboardJsonData := make(map[string]string)
-		rethDashboardJsonData["reth-overview.json"] = string(rethDashboard)
-		rethDashboardConfig := pulumi.String(`
-apiVersion: 1
-
-
-providers:
-  - name: dashboards
-    type: file
-    updateIntervalSeconds: 30
-    options:
-      path: /etc/dashboards
-      foldersFromFilesStructure: true
-`)
+		rethDashboardConfig, err := os.ReadFile("config/grafana/dashboards/dashboard-config.yaml")
+		if err != nil {
+			return err // Handle the error according to your needs.
+		}
 
 		// Create a Kubernetes Namespace for Prometheus
 		ns, err := corev1.NewNamespace(ctx, "prometheus", &corev1.NamespaceArgs{
 			Metadata: &metav1.ObjectMetaArgs{
-				Name: pulumi.String("prometheus"),
+				Name: pulumi.String("monitoring"),
 			},
 		})
 		if err != nil {
@@ -140,6 +136,7 @@ scrape_configs:
 		if err != nil {
 			return err
 		}
+
 		// Create the ebs gp2 storage class
 		_, err = storagev1.NewStorageClass(ctx, "ebs-sc", &storagev1.StorageClassArgs{
 			Metadata: &metav1.ObjectMetaArgs{
@@ -162,7 +159,7 @@ scrape_configs:
 		_, err = corev1.NewPersistentVolumeClaim(ctx, "grafana-pvc", &corev1.PersistentVolumeClaimArgs{
 			Metadata: &metav1.ObjectMetaArgs{
 				Name:      pulumi.String("grafana-pvc"), // Name of the PVC
-				Namespace: pulumi.String("prometheus"),  // Namespace to create the PVC in
+				Namespace: ns.Metadata.Name(),           // Namespace to create the PVC in
 			},
 			Spec: &corev1.PersistentVolumeClaimSpecArgs{
 				AccessModes: pulumi.StringArray{pulumi.String("ReadWriteOnce")}, // ReadWriteOnce is the only supported mode for EBS
@@ -177,6 +174,11 @@ scrape_configs:
 		if err != nil {
 			return err
 		}
+		//read grafana.ini config file into var
+		grafanaConfigFile, err := os.ReadFile("config/grafana/grafana.ini")
+		if err != nil {
+			return err // Handle the error according to your needs.
+		}
 
 		// create configmap for grafana
 		grafanaConfig, err := corev1.NewConfigMap(ctx, "grafana-config", &corev1.ConfigMapArgs{
@@ -185,27 +187,17 @@ scrape_configs:
 				Name:      pulumi.String("grafana-config"),
 			},
 			Data: pulumi.StringMap{
-				"grafana.ini": pulumi.String(`
-[paths]
-data = /var/lib/grafana/data
-logs = /var/log/grafana
-plugins = /var/lib/grafana/plugins
-[server]
-http_port = 3000
-[database]
-type = sqlite3
-path = grafana.db
-[session]
-provider = file
-provider_config = sessions
-[analytics]
-reporting_enabled = false
-check_for_updates = false
-`),
+				"grafana.ini": pulumi.String(grafanaConfigFile),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
 			return err
+		}
+
+		// read prometheus.yaml from file
+		grafanaPrometheusDatasourceConfigFile, err := os.ReadFile("config/grafana/prometheus.yaml")
+		if err != nil {
+			return err // Handle the error according to your needs.
 		}
 
 		grafanaPrometheusDatasourceConfig, err := corev1.NewConfigMap(ctx, "grafana-prometheus-datasource-config", &corev1.ConfigMapArgs{
@@ -214,19 +206,8 @@ check_for_updates = false
 				Name:      pulumi.String("grafana-prometheus-datasource-config"),
 			},
 			Data: pulumi.StringMap{
-				"prometheus.yaml": pulumi.String(`
-apiVersion: 1
-
-datasources:
-- name: Prometheus
-  type: prometheus
-  access: proxy
-  orgId: 1
-  url: http://prometheus-service:9090
-  isDefault: true
-  version: 1
-  editable: true
-`)},
+				"prometheus.yaml": pulumi.String(grafanaPrometheusDatasourceConfigFile),
+			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
 			return err
@@ -238,7 +219,7 @@ datasources:
 				Name:      pulumi.String("grafana-reth-dashboard-config"),
 			},
 			Data: pulumi.StringMap{
-				"dashboard.yaml": rethDashboardConfig,
+				"dashboard.yaml": pulumi.String(rethDashboardConfig),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
@@ -355,20 +336,20 @@ datasources:
 		}
 
 		// Create a Service to expose grafana Deployment
-		_, err = corev1.NewService(ctx, "grafana-service", &corev1.ServiceArgs{
+		grafanaService, err := corev1.NewService(ctx, "grafana-service", &corev1.ServiceArgs{
 			Metadata: &metav1.ObjectMetaArgs{
 				Namespace: ns.Metadata.Name(),
 				Name:      pulumi.String("grafana-service"),
 			},
 			Spec: &corev1.ServiceSpecArgs{
 				Selector: appLabelGrafana,
+				Type:     pulumi.String("NodePort"),
 				Ports: corev1.ServicePortArray{
 					&corev1.ServicePortArgs{
-						Port:       pulumi.Int(3000),
+						Port:       pulumi.Int(80),
 						TargetPort: pulumi.Int(3000),
 					},
 				},
-				Type: pulumi.String("ClusterIP"),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns, grafana}))
 		if err != nil {
@@ -413,6 +394,75 @@ datasources:
 				Type: pulumi.String("ClusterIP"),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns, grafana}))
+		if err != nil {
+			return err
+		}
+
+		// Create an ingress for grafanaService
+		grafanaIngress, err := networkingv1.NewIngress(ctx, "grafana-ingress", &networkingv1.IngressArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Namespace: ns.Metadata.Name(),
+				Name:      pulumi.String("grafana-ingress"),
+				Annotations: pulumi.StringMap{
+					"kubernetes.io/ingress.class":                    pulumi.String("alb"),
+					"alb.ingress.kubernetes.io/scheme":               pulumi.String("internet-facing"),
+					"alb.ingress.kubernetes.io/target-type":          pulumi.String("instance"),
+					"alb.ingress.kubernetes.io/certificate-arn":      pulumi.String(cfg.Require("grafanaTlsCertId")),
+					"alb.ingress.kubernetes.io/listen-ports":         pulumi.String(`[{"HTTP": 80}, {"HTTPS":443}]`),
+					"alb.ingress.kubernetes.io/actions.ssl-redirect": pulumi.String(`{"Type": "redirect", "RedirectConfig": { "Protocol": "HTTPS", "Port": "443", "StatusCode": "HTTP_301"}}`),
+				},
+			},
+			Spec: &networkingv1.IngressSpecArgs{
+				Rules: &networkingv1.IngressRuleArray{
+					&networkingv1.IngressRuleArgs{
+						Http: &networkingv1.HTTPIngressRuleValueArgs{
+							Paths: &networkingv1.HTTPIngressPathArray{
+								&networkingv1.HTTPIngressPathArgs{
+									Path:     pulumi.String("/"), // Assuming you want to route all traffic to Grafana
+									PathType: pulumi.String("Prefix"),
+									Backend: &networkingv1.IngressBackendArgs{
+										Service: &networkingv1.IngressServiceBackendArgs{
+											Name: pulumi.String("grafana-service"),
+											Port: &networkingv1.ServiceBackendPortArgs{
+												Number: pulumi.Int(80),
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{ns, grafanaService}))
+		if err != nil {
+			return err
+		}
+
+		lbHostname := grafanaIngress.Status.ApplyT(func(status *networkingv1.IngressStatus) (string, error) {
+			// status.LoadBalancer could be nil or have an empty Ingress slice.
+			if status.LoadBalancer == nil || len(status.LoadBalancer.Ingress) == 0 {
+				return "", fmt.Errorf("no ingress load balancer information found")
+			}
+			// Return the hostname of the load balancer, make sure to handle possible nil values.
+			if status.LoadBalancer.Ingress[0].Hostname != nil {
+				return *status.LoadBalancer.Ingress[0].Hostname, nil
+			}
+			return "", fmt.Errorf("load balancer ingress hostname is nil")
+		}).(pulumi.StringInput)
+
+		zoneId := cfg.Require("zoneId")
+
+		// create route53 record for grafana
+		_, err = route53.NewRecord(ctx, "grafana-route53", &route53.RecordArgs{
+			Name: pulumi.String(recordName),
+			Records: pulumi.StringArray{
+				lbHostname,
+			},
+			Ttl:    pulumi.Int(300),
+			Type:   pulumi.String("CNAME"),
+			ZoneId: pulumi.String(zoneId),
+		})
 		if err != nil {
 			return err
 		}

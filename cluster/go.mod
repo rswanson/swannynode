@@ -5,7 +5,7 @@ go 1.21.4
 require (
 	github.com/pulumi/pulumi-aws/sdk/v6 v6.13.2
 	github.com/pulumi/pulumi-kubernetes/sdk/v4 v4.5.5
-	github.com/pulumi/pulumi/sdk/v3 v3.96.1
+	github.com/pulumi/pulumi/sdk/v3 v3.96.2
 )
 
 require (
@@ -68,6 +68,7 @@ require (
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/cobra v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stretchr/objx v0.5.0 // indirect
 	github.com/texttheater/golang-levenshtein v1.0.1 // indirect
 	github.com/tweekmonster/luser v0.0.0-20161003172636-3fa38070dbd7 // indirect
 	github.com/uber/jaeger-client-go v2.30.0+incompatible // indirect
@@ -90,4 +91,5 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/frand v1.4.2 // indirect
+	pgregory.net/rapid v0.6.1 // indirect
 )
