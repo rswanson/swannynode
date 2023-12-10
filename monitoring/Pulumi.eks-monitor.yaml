@@ -1,4 +1,6 @@
 config:
+  monitoring:grafanaTlsCertId:
+    secure: AAABANJvGYcMpNsffnnTn/41jfqTbQVOferf0+r0+Gstko4jjq8yod+4dVozADZzi1cF0xuuy4sgI27SGewysJoo4uh3VLHvsAaCJjMRygHq5V5o4s19QKmx8RrWKFYpYBggsTrJBKz/4XqlBr1/4dnAgA==
   monitoring:recordName:
     secure: AAABAAWNmcdMElZScN7rLn0cK9l57od8EfvdtYXsc1JXFVAmpILdkmwrzY7oRk1hJ/s=
   monitoring:rethTargetIp:

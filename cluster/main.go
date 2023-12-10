@@ -46,6 +46,7 @@ func main() {
 			ClientIdLists: pulumi.StringArray{
 				pulumi.String("sts.amazonaws.com"),
 				pulumi.String("system:serviceaccount:kube-system:ebs-csi-controller-sa"),
+				pulumi.String("system:serviceaccount:kube-system:aws-load-balancer-controller"),
 			},
 			ThumbprintLists: pulumi.StringArray{
 				oidcThumbprint,
@@ -273,7 +274,6 @@ func main() {
 					"Action": "sts:AssumeRoleWithWebIdentity",
 					"Condition": {
 					  "StringEquals": {
-						"` + aud + `": "sts.amazonaws.com",
 						"` + sub + `": "system:serviceaccount:kube-system:aws-load-balancer-controller"
 					  }
 					}
@@ -300,6 +300,13 @@ func main() {
 			Metadata: &metav1.ObjectMetaArgs{
 				Name:      pulumi.String("aws-load-balancer-controller"),
 				Namespace: pulumi.String("kube-system"),
+				Labels: pulumi.StringMap{
+					"app.kubernetes.io/name":      pulumi.String("aws-load-balancer-controller"),
+					"app.kubernetes.io/component": pulumi.String("controller"),
+				},
+				Annotations: pulumi.StringMap{
+					"eks.amazonaws.com/role-arn": awsLbControllerRole.Arn,
+				},
 			},
 		})
 		if err != nil {
