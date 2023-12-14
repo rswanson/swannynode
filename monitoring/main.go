@@ -18,7 +18,9 @@ func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// fetch the rethTargetIp from the stack config
 		cfg := config.New(ctx, "")
-		rethTargetIp := cfg.Require("rethTargetIp") // Assuming vpcId is a string
+		rethTargetIp := cfg.Require("rethTargetIp")
+		validatorTargetIp := cfg.Require("validatorTargetIp")
+		consensusTargetIp := cfg.Require("consensusTargetIp")
 		recordName := cfg.Require("recordName")
 
 		// dashboard vars
@@ -61,7 +63,14 @@ scrape_configs:
       - targets: ['localhost:9090']
   - job_name: reth
     static_configs:
-      - targets: ['` + rethTargetIp + `']`),
+      - targets: ['` + rethTargetIp + `']
+  - job_name: validator
+    static_configs:
+      - targets: ['` + validatorTargetIp + `']
+  - job_name: beacon_node
+    static_configs:
+      - targets: ['` + consensusTargetIp + `']
+`),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
 		if err != nil {
