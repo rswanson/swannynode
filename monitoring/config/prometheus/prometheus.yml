@@ -7,3 +7,6 @@ scrape_configs:
   - job_name: reth
     static_configs:
       - targets: ['` + rethTargetIp + `']`),
+  - job_name: validator
+    static_configs:
+      - targets: ['` + validatorTargetIp + `']`),
