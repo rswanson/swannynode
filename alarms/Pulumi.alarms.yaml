@@ -1,0 +1,6 @@
+config:
+  alarms:email:
+    secure: AAABAMj/5RV3i6ltxwVLS9kmYXhUZjUFQCzE1KpQ1MRKNCKyFyZRQxqDSQN+h44=
+  alarms:instanceId:
+    secure: AAABAAHLTJ2o6zhc4yh03gHApcLpAzhq1dm/CrqTmPKTONpU6kNWLlkuOnOfHpvfJjzi
+  aws:region: us-east-2
