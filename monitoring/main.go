@@ -172,9 +172,9 @@ scrape_configs:
 			},
 			Spec: &corev1.PersistentVolumeClaimSpecArgs{
 				AccessModes: pulumi.StringArray{pulumi.String("ReadWriteOnce")}, // ReadWriteOnce is the only supported mode for EBS
-				Resources: corev1.ResourceRequirementsArgs{
+				Resources: corev1.VolumeResourceRequirementsArgs{
 					Requests: pulumi.StringMap{
-						"storage": pulumi.String("5Gi"), // Request 5 GiB of space
+						"storage": pulumi.String("5Gi"), // Request 10Gi of storage
 					},
 				},
 				StorageClassName: pulumi.String("aws-gp2"), // Use the 'aws-gp2' storage class
