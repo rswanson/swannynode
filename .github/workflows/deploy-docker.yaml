@@ -14,7 +14,7 @@ jobs:
       contents: read
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v
+      uses: actions/checkout@v4
 
     - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v4
@@ -31,5 +31,5 @@ jobs:
         REPOSITORY: grafana-swannynode
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+        docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG monitoring/config/grafana
         docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
