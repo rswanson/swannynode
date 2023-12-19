@@ -1,7 +1,7 @@
 {
   "__inputs": [
     {
-      "name": "DS_PROMETHEUS",
+      "name": "prometheus",
       "label": "Prometheus",
       "description": "",
       "type": "datasource",
@@ -53,7 +53,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": "${prometheus}",
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -172,7 +172,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": "${prometheus}",
       "fieldConfig": {
         "defaults": {
           "custom": {}
@@ -270,7 +270,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": "${prometheus}",
       "fieldConfig": {
         "defaults": {
           "custom": {}
@@ -366,7 +366,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": "${prometheus}",
       "fieldConfig": {
         "defaults": {
           "custom": {}
@@ -462,7 +462,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": "${prometheus}",
       "fieldConfig": {
         "defaults": {
           "custom": {}
@@ -558,7 +558,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": "${prometheus}",
       "fieldConfig": {
         "defaults": {
           "custom": {}
@@ -656,7 +656,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": "${prometheus}",
       "description": "",
       "fieldConfig": {
         "defaults": {
@@ -755,7 +755,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS}",
+      "datasource": "${prometheus}",
       "description": "",
       "fieldConfig": {
         "defaults": {
