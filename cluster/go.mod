@@ -3,7 +3,7 @@ module swannynode-cluster/m/v2
 go 1.21.4
 
 require (
-	github.com/pulumi/pulumi-aws/sdk/v6 v6.14.0
+	github.com/pulumi/pulumi-aws/sdk/v6 v6.15.0
 	github.com/pulumi/pulumi-kubernetes/sdk/v4 v4.6.1
 	github.com/pulumi/pulumi/sdk/v3 v3.97.0
 )
