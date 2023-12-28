@@ -1,0 +1,4 @@
+config:
+  aws:region: us-east-2
+  swannynode-mainnet:execution-jwt:
+    secure: AAABALmBgA44kkSmfpCgnpMVoqOpbyvdrsWX0+7RtjmlmkORpzc/yodVkLp5kTaKfHiRO6EFxlGju6sW32QCFX2DI+Ch+7+C9qpSLThgZ7cbY/EWXdke/rrVrL7BhRpi
