@@ -72,7 +72,7 @@ scrape_configs:
       - targets: ['` + consensusTargetIp + `']
   - job_name: holesky_reth
     static_configs:
-	  - targets: ['reth-internal-service.default:9001']
+      - targets: ['reth-internal-service.default:9001']
 `),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
