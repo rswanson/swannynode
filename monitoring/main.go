@@ -28,7 +28,7 @@ func main() {
 		if err != nil {
 			return err // Handle the error according to your needs.
 		}
-		rethDashboardConfig, err := os.ReadFile("config/grafana/dashboards/dashboard-config.yaml")
+		rethDashboardConfig, err := os.ReadFile("config/grafana/dashboard-config.yaml")
 		if err != nil {
 			return err // Handle the error according to your needs.
 		}
