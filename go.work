@@ -4,4 +4,5 @@ use (
 	./alarms
 	./cluster
 	./monitoring
+	./swannynode-holesky
 )

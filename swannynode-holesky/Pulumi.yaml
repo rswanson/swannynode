@@ -1,0 +1,3 @@
+name: swannynode-mainnet
+runtime: go
+description: The pulumi configuration for swannynode-mainnet, an archive node

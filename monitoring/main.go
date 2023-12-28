@@ -28,7 +28,7 @@ func main() {
 		if err != nil {
 			return err // Handle the error according to your needs.
 		}
-		rethDashboardConfig, err := os.ReadFile("config/grafana/dashboards/dashboard-config.yaml")
+		rethDashboardConfig, err := os.ReadFile("config/grafana/dashboard-config.yaml")
 		if err != nil {
 			return err // Handle the error according to your needs.
 		}
@@ -70,6 +70,9 @@ scrape_configs:
   - job_name: beacon_node
     static_configs:
       - targets: ['` + consensusTargetIp + `']
+  - job_name: holesky_reth
+    static_configs:
+      - targets: ['reth-internal-service.default:9001']
 `),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
