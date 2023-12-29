@@ -70,7 +70,7 @@ func main() {
 		}
 
 		// Define the PersistentVolumeClaim for 30Gi storage for lighthouse
-		storageSize = pulumi.String("30Gi") // 30Gi size for holesky
+		storageSize = pulumi.String("70Gi") // 30Gi size for holesky
 		_, err = corev1.NewPersistentVolumeClaim(ctx, "lighthouse-data", &corev1.PersistentVolumeClaimArgs{
 			Metadata: &metav1.ObjectMetaArgs{
 				Name: pulumi.String("lighthouse-data"),
@@ -312,6 +312,13 @@ func main() {
 									corev1.ContainerPortArgs{
 										ContainerPort: pulumi.Int(9000),
 										Protocol:      pulumi.String("UDP"),
+									},
+									corev1.ContainerPortArgs{
+										ContainerPort: pulumi.Int(9001),
+										Protocol:      pulumi.String("UDP"),
+									},
+									corev1.ContainerPortArgs{
+										ContainerPort: pulumi.Int(5054),
 									},
 									corev1.ContainerPortArgs{
 										ContainerPort: pulumi.Int(5052),
