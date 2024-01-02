@@ -479,6 +479,60 @@ scrape_configs:
 			return err
 		}
 
+		// Create a daemonset to deploy prometheus-node-exporter
+		_, err = appsv1.NewDaemonSet(ctx, "prometheus-node-exporter", &appsv1.DaemonSetArgs{
+			Metadata: &metav1.ObjectMetaArgs{
+				Namespace: ns.Metadata.Name(),
+			},
+			Spec: &appsv1.DaemonSetSpecArgs{
+				Selector: &metav1.LabelSelectorArgs{
+					MatchLabels: pulumi.StringMap{
+						"app": pulumi.String("prometheus-node-exporter"),
+					},
+				},
+				Template: &corev1.PodTemplateSpecArgs{
+					Metadata: &metav1.ObjectMetaArgs{
+						Labels: pulumi.StringMap{
+							"app": pulumi.String("prometheus-node-exporter"),
+						},
+					},
+					Spec: &corev1.PodSpecArgs{
+						Containers: corev1.ContainerArray{
+							&corev1.ContainerArgs{
+								Name:  pulumi.String("prometheus-node-exporter"),
+								Image: pulumi.String("prom/node-exporter"),
+								Ports: corev1.ContainerPortArray{
+									&corev1.ContainerPortArgs{
+										ContainerPort: pulumi.Int(9100),
+									},
+								},
+								SecurityContext: &corev1.SecurityContextArgs{
+									Privileged: pulumi.Bool(true),
+								},
+								VolumeMounts: corev1.VolumeMountArray{
+									&corev1.VolumeMountArgs{
+										Name:      pulumi.String("root"),
+										MountPath: pulumi.String("/host"),
+									},
+								},
+							},
+						},
+						Volumes: corev1.VolumeArray{
+							&corev1.VolumeArgs{
+								Name: pulumi.String("root"),
+								HostPath: &corev1.HostPathVolumeSourceArgs{
+									Path: pulumi.String("/"),
+								},
+							},
+						},
+					},
+				},
+			},
+		}, pulumi.DependsOn([]pulumi.Resource{ns}))
+		if err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
