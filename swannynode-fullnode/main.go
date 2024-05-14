@@ -27,6 +27,16 @@ func main() {
 			Port:       pulumi.Float64Ptr(22),
 		}
 
+		// install lighthouse and reth package deps
+		installDeps, err := remote.NewCommand(ctx, "installDeps", &remote.CommandArgs{
+			Connection: connection,
+			Create:     pulumi.String("yum -y install git make perl clang cmake"),
+		})
+		if err != nil {
+			ctx.Log.Error("Error installing dependencies", nil)
+			return err
+		}
+
 		// Create the reth user
 		rethUser, err := remote.NewCommand(ctx, "createUser-reth", &remote.CommandArgs{
 			Connection: connection,
@@ -68,6 +78,16 @@ func main() {
 			return err
 		}
 
+		// create the data directory structure
+		dataDir, err := remote.NewCommand(ctx, "createDataDir", &remote.CommandArgs{
+			Connection: connection,
+			Create:     pulumi.String("mkdir -p /data/repos/mainnet/ /data/scripts/ /data/shared/ /data/bin/"),
+		})
+		if err != nil {
+			ctx.Log.Error("Error creating data directory", nil)
+			return err
+		}
+
 		// Add lighthouse user to eth group
 		groupAddLighthouse, err := remote.NewCommand(ctx, "addLighthouseUserToEthGroup", &remote.CommandArgs{
 			Connection: connection,
@@ -84,7 +104,7 @@ func main() {
 			DeploymentType: "source",
 			DataDir:        "/data/mainnet/lighthouse",
 			Connection:     connection,
-		}, pulumi.DependsOn([]pulumi.Resource{groupAddLighthouse}))
+		}, pulumi.DependsOn([]pulumi.Resource{groupAddLighthouse, dataDir, installDeps}))
 		if err != nil {
 			ctx.Log.Error("Error creating consensus client", nil)
 			return err
@@ -97,7 +117,7 @@ func main() {
 			DeploymentType: "source",
 			DataDir:        "/data/mainnet/reth",
 			Connection:     connection,
-		}, pulumi.DependsOn([]pulumi.Resource{groupAddReth}))
+		}, pulumi.DependsOn([]pulumi.Resource{groupAddReth, dataDir, installDeps}))
 		if err != nil {
 			ctx.Log.Error("Error creating execution client", nil)
 			return err
