@@ -13,6 +13,6 @@ DATA_DIR="/data/${NETWORK}/lighthouse"
   --metrics-port 6064 \
   --disable-deposit-contract-sync \
   --checkpoint-sync-url https://mainnet.checkpoint.sigp.io \
-  --execution-endpoint http://127.0.0.1:8651 \
+  --execution-endpoint http://127.0.0.1:8551 \
   --execution-jwt /data/shared/jwt.hex \
   --port 10000
