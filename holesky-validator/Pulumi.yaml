@@ -1,0 +1,3 @@
+name: holesky-validator
+runtime: go
+description: holesky validator in kubernetes

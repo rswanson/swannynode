@@ -2,3 +2,9 @@ config:
   aws:region: us-east-2
   swannynode-mainnet:execution-jwt:
     secure: AAABALmBgA44kkSmfpCgnpMVoqOpbyvdrsWX0+7RtjmlmkORpzc/yodVkLp5kTaKfHiRO6EFxlGju6sW32QCFX2DI+Ch+7+C9qpSLThgZ7cbY/EWXdke/rrVrL7BhRpi
+  swannynode-mainnet:publicHostname:
+    secure: AAABAIoeoSD0CzMEDhdHeuJIXKh/JWWV84SMSODeb3n9DzJDKq5yrVswQVoIa64iPx8=
+  swannynode-mainnet:rethIngressTlsCertArn:
+    secure: AAABADNo/P6izVNoOs6PcOTWzkGco/XfiXZQBqL0ZIlj+zJLMFCbiZyRI6riAS13N1t2NjITu/A2TzppBU7nrRej0f0wnryYC8LR7oBWDsiqN5QA1o7uV2J6r1Ej1RZVARAQ/sjUYHVlEpd4DyH2g5U74w==
+  swannynode-mainnet:zoneId:
+    secure: AAABAHsjgawYWQjGLozW1fRF4GV4y1PL5Nn61L/md2sdKjbSGwnNni2+F51kGKwbcIsVXkE=

@@ -3,6 +3,7 @@ go 1.21.5
 use (
 	./alarms
 	./cluster
+	./holesky-validator
 	./monitoring
 	./swannynode-holesky
 )
