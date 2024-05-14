@@ -7,6 +7,8 @@ config:
     secure: AAABAAWNmcdMElZScN7rLn0cK9l57od8EfvdtYXsc1JXFVAmpILdkmwrzY7oRk1hJ/s=
   monitoring:rethTargetIp:
     secure: AAABAHNLaEQDDxnDRIHiM8VAa7DkrH3HtxZCrF1wpE7WzdfxNFXCu69JbdREH6M=
+  monitoring:tempNodeTargetIp:
+    secure: AAABAPBKK0Z4YOF1g+1Lw9CpZPT/QlAtz4+gQwenx9CEuXZuZ+5H0+1dsOjLS15B
   monitoring:validatorTargetIp:
     secure: AAABADvVFaaqTed402ZYglry0hVXW5lk7J5JuS2d4Z2a6Nl4+LgHloU+BFf5qmw=
   monitoring:zoneId:
