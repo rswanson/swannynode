@@ -21,6 +21,7 @@ func main() {
 		rethTargetIp := cfg.Require("rethTargetIp")
 		validatorTargetIp := cfg.Require("validatorTargetIp")
 		consensusTargetIp := cfg.Require("consensusTargetIp")
+		tempNodeTargetIp := cfg.Require("tempNodeTargetIp")
 		recordName := cfg.Require("recordName")
 
 		// dashboard vars
@@ -73,6 +74,9 @@ scrape_configs:
   - job_name: holesky_reth
     static_configs:
       - targets: ['reth-internal-service.default:9001']
+  - job_name: temp_node
+    static_configs:
+      - targets: ['` + tempNodeTargetIp + `']
 `),
 			},
 		}, pulumi.DependsOn([]pulumi.Resource{ns}))
