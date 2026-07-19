@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # Pull validator key material from Secrets Manager and import it into the
-# lighthouse datadir. Idempotent: skips if validator_definitions.yml exists.
+# lighthouse datadir. Idempotent via a sentinel written only after BOTH the
+# keystore and slashing-protection imports succeed, so a partial first run
+# (e.g. slashing import failed) is retried in full, never skipped.
 # A hard failure here (e.g. secrets not yet pushed) is INTENTIONAL — it keeps
 # lighthousevalidator.service from ever starting without keys + slashing data.
 set -euo pipefail
 DATADIR="${DATADIR:-/data/mainnet/lighthouse}"
 LH_BIN="${LH_BIN:-/data/bin/lighthouse}"
 SECRET_PREFIX="${SECRET_PREFIX:-mainnet-validator}"
+SENTINEL="$DATADIR/.validator-import-complete"
 
-if [ -f "$DATADIR/validators/validator_definitions.yml" ]; then
+if [ -f "$SENTINEL" ]; then
   echo "validator already imported; skipping"
   exit 0
 fi
 
+mkdir -p "$DATADIR"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 chmod 700 "$tmp"
@@ -39,5 +43,6 @@ if [ -f "$tmp/interchange.json" ]; then
     --network mainnet --datadir "$DATADIR"
 fi
 
+touch "$SENTINEL"
 chown -R lighthouse:eth "$DATADIR"
 echo "validator import complete"

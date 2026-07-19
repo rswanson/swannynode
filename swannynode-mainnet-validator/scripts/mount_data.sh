@@ -14,9 +14,21 @@ for _ in $(seq 1 60); do
 done
 [ -e "$DEV" ] || { echo "device $DEV not found after 120s" >&2; exit 1; }
 
-if ! blkid "$DEV" >/dev/null 2>&1; then
+# Three-way guard: format ONLY a provably blank device. blkid rc=2 means
+# "probed fine, no filesystem found"; any other failure (permissions,
+# transient error) must abort rather than risk formatting real data.
+set +e
+FS_TYPE=$(blkid -o value -s TYPE "$DEV" 2>/dev/null)
+probe_rc=$?
+set -e
+if [ -n "$FS_TYPE" ]; then
+  echo "existing $FS_TYPE filesystem found; leaving data intact"
+elif [ "$probe_rc" -eq 2 ]; then
   echo "blank device; creating ext4 filesystem"
   mkfs.ext4 -L validator-data "$DEV"
+else
+  echo "blkid probe failed (rc=$probe_rc); refusing to format" >&2
+  exit 1
 fi
 
 UUID=$(blkid -s UUID -o value "$DEV")

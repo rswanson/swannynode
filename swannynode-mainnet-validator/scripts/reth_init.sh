@@ -5,7 +5,9 @@
 set -euo pipefail
 DATADIR="${DATADIR:-/data/mainnet/reth}"
 RETH_BIN="${RETH_BIN:-/data/bin/reth}"
-MAX_ATTEMPTS="${MAX_ATTEMPTS:-10}"
+# High ceiling: the download resumes via HTTP-Range so retries are cheap,
+# and permanently blocking reth.service on a transient outage is worse.
+MAX_ATTEMPTS="${MAX_ATTEMPTS:-200}"
 RETRY_DELAY="${RETRY_DELAY:-30}"
 
 if [ -f "$DATADIR/db/mdbx.dat" ]; then
