@@ -9,7 +9,27 @@ func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		cfg := config.New(ctx, "")
 		sc := loadStackConfig(cfg)
-		_ = sc // wired in later tasks
+
+		net, err := createNetwork(ctx, sc)
+		if err != nil {
+			return err
+		}
+		sto, err := createStorage(ctx, sc)
+		if err != nil {
+			return err
+		}
+		id, err := createIdentity(ctx)
+		if err != nil {
+			return err
+		}
+		comp, err := createCompute(ctx, sc, net, sto, id)
+		if err != nil {
+			return err
+		}
+
+		ctx.Export("instanceId", comp.Instance.ID())
+		ctx.Export("publicIp", net.Eip.PublicIp)
+		ctx.Export("dataVolumeId", sto.Volume.ID())
 		return nil
 	})
 }
