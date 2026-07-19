@@ -31,3 +31,5 @@ override.tf.json
 .op/
 **/*.env
 kubeconfig.yml
+# Go build binary (swannynode-mainnet-validator)
+swannynode-mainnet-validator/swannynode-mainnet-validator
