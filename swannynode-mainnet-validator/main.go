@@ -27,6 +27,11 @@ func main() {
 			return err
 		}
 
+		sshKey := cfg.RequireSecret("sshKey")
+		if err := deployNode(ctx, sc, net, sto, comp, sshKey); err != nil {
+			return err
+		}
+
 		ctx.Export("instanceId", comp.Instance.ID())
 		ctx.Export("publicIp", net.Eip.PublicIp)
 		ctx.Export("dataVolumeId", sto.Volume.ID())
