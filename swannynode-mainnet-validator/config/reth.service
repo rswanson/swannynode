@@ -1,0 +1,19 @@
+[Unit]
+Description=reth execution client (mainnet, --minimal)
+RequiresMountsFor=/data
+Requires=reth-init.service
+After=reth-init.service network-online.target
+Wants=network-online.target
+
+[Service]
+User=reth
+Group=eth
+ExecStart=/data/scripts/start_reth.sh
+Restart=always
+RestartSec=30s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reth
+
+[Install]
+WantedBy=multi-user.target

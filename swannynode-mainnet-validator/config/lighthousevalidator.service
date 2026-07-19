@@ -1,0 +1,19 @@
+[Unit]
+Description=lighthouse validator client (mainnet)
+RequiresMountsFor=/data
+Requires=validator-init.service
+After=validator-init.service lighthousebeacon.service
+
+[Service]
+User=lighthouse
+Group=eth
+EnvironmentFile=/etc/swannynode/validator.env
+ExecStart=/data/scripts/start_lighthouse_vc.sh
+Restart=always
+RestartSec=30s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lighthouse-vc
+
+[Install]
+WantedBy=multi-user.target

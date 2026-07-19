@@ -1,0 +1,19 @@
+[Unit]
+Description=reth one-time snapshot initialization (guarded; no-op if datadir exists)
+RequiresMountsFor=/data
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=reth
+Group=eth
+TimeoutStartSec=infinity
+ExecStart=/data/scripts/reth_init.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reth-init
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=mev-boost (mainnet)
+RequiresMountsFor=/data
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=mevboost
+Group=eth
+ExecStart=/data/scripts/start_mevboost.sh
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mev-boost
+
+[Install]
+WantedBy=multi-user.target
