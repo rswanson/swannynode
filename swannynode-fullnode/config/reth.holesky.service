@@ -1,18 +1,18 @@
 [Unit]
-Description=Reth mainnet Service
+Description=Reth holesky Service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 User=reth
-ExecStart=/data/scripts/start_reth_mainnet.sh
+ExecStart=/data/scripts/start_reth_holesky.sh
 Restart=always
 RestartSec=30s
 
 # logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=reth-mainnet
+SyslogIdentifier=reth-holesky
 
 [Install]
 WantedBy=multi-user.target

@@ -1,18 +1,18 @@
 [Unit]
-Description=Lighthouse mainnet Service
+Description=Lighthouse holesky Service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 User=lighthouse
-ExecStart=/data/scripts/start_lighthouse_mainnet.sh
+ExecStart=/data/scripts/start_lighthouse_holesky.sh
 Restart=always
 RestartSec=30s
 
 # logging
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lighthouse-mainnet
+SyslogIdentifier=lighthouse-holesky
 
 [Install]
 WantedBy=multi-user.target

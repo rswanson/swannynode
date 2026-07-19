@@ -81,7 +81,7 @@ func main() {
 		// create the data directory structure
 		dataDir, err := remote.NewCommand(ctx, "createDataDir", &remote.CommandArgs{
 			Connection: connection,
-			Create:     pulumi.String("mkdir -p /data/repos/mainnet/ /data/scripts/ /data/shared/ /data/bin/"),
+			Create:     pulumi.String("mkdir -p /data/repos/holesky/ /data/scripts/ /data/shared/ /data/bin/"),
 		})
 		if err != nil {
 			ctx.Log.Error("Error creating data directory", nil)
@@ -100,9 +100,9 @@ func main() {
 
 		_, err = consensusClient.NewConsensusClientComponent(ctx, "consensusClient", &consensusClient.ConsensusClientComponentArgs{
 			Client:         "lighthouse",
-			Network:        "mainnet",
+			Network:        "holesky",
 			DeploymentType: "source",
-			DataDir:        "/data/mainnet/lighthouse",
+			DataDir:        "/data/holesky/lighthouse",
 			Connection:     connection,
 		}, pulumi.DependsOn([]pulumi.Resource{groupAddLighthouse, dataDir, installDeps}))
 		if err != nil {
@@ -113,9 +113,9 @@ func main() {
 		// Create execution client
 		_, err = executionClient.NewExecutionClientComponent(ctx, "executionClient", &executionClient.ExecutionClientComponentArgs{
 			Client:         "reth",
-			Network:        "mainnet",
+			Network:        "holesky",
 			DeploymentType: "source",
-			DataDir:        "/data/mainnet/reth",
+			DataDir:        "/data/holesky/reth",
 			Connection:     connection,
 		}, pulumi.DependsOn([]pulumi.Resource{groupAddReth, dataDir, installDeps}))
 		if err != nil {

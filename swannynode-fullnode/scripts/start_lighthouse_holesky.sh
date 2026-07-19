@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Environment variables
-NETWORK="mainnet"
+NETWORK="holesky"
 DATA_DIR="/data/${NETWORK}/lighthouse"
 # Start lighthouse
 /data/bin/lighthouse bn \
