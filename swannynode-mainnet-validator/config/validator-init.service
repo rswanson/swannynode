@@ -1,0 +1,18 @@
+[Unit]
+Description=validator one-time key + slashing-protection import from Secrets Manager
+RequiresMountsFor=/data
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+EnvironmentFile=/etc/swannynode/validator.env
+ExecStart=/data/scripts/fetch_and_import_validator.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=validator-init
+
+[Install]
+WantedBy=multi-user.target
