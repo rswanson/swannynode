@@ -42,11 +42,17 @@ func TestDeployBootstrapContent(t *testing.T) {
 		"FEE_RECIPIENT=",     // env file for the vc
 		"jwt.hex",            // shared JWT created
 		"systemctl daemon-reload",
-		"enable --now mevboost reth-init reth lighthousebeacon",
+		"systemctl enable mevboost reth-init reth lighthousebeacon",
+		// --no-block: reth-init is a oneshot with infinite timeout; a blocking
+		// start would hang the bootstrap for the whole snapshot download
+		"systemctl start --no-block mevboost reth-init reth lighthousebeacon",
+		"awscli-exe-linux-aarch64.zip",                        // Ubuntu images lack aws cli; validator-init needs it
 		"systemctl enable validator-init lighthousevalidator", // enabled, NOT started: gated on secrets + old node stopped
 	} {
 		require.True(t, strings.Contains(script, want), "bootstrap script missing %q", want)
 	}
-	require.False(t, strings.Contains(script, "enable --now lighthousevalidator"),
+	require.False(t, strings.Contains(script, "enable --now"),
+		"blocking enable --now must not be used; vc must never auto-start on first deploy")
+	require.False(t, strings.Contains(script, "start --no-block lighthousevalidator"),
 		"vc must never auto-start on first deploy")
 }

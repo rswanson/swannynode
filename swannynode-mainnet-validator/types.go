@@ -44,6 +44,6 @@ func loadStackConfig(cfg *config.Config) StackConfig {
 		MevboostVersion:   getOr(cfg, "mevboostVersion", "1.12"),
 		FeeRecipient:      cfg.Require("feeRecipient"),
 		KeyName:           cfg.Require("keyName"),
-		SshUser:           getOr(cfg, "sshUser", "ec2-user"),
+		SshUser:           getOr(cfg, "sshUser", "ubuntu"),
 	}
 }

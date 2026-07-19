@@ -18,10 +18,16 @@ func deployNode(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage
 		Port:       pulumi.Float64Ptr(22),
 	}
 
+	// The SSH host is the stable EIP, so a replacement instance looks identical
+	// to the connection. Trigger on the instance ID so every new instance gets
+	// fresh copies and a fresh bootstrap run.
+	instanceTrigger := pulumi.Array{comp.Instance.ID()}
+
 	copyScripts, err := remote.NewCopyToRemote(ctx, "copy-scripts", &remote.CopyToRemoteArgs{
 		Connection: conn,
 		Source:     pulumi.NewFileArchive("./scripts"),
 		RemotePath: pulumi.String("/home/" + cfg.SshUser + "/deploy"),
+		Triggers:   instanceTrigger,
 	}, pulumi.DependsOn([]pulumi.Resource{comp.EipAssoc, comp.Attachment}))
 	if err != nil {
 		return err
@@ -31,6 +37,7 @@ func deployNode(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage
 		Connection: conn,
 		Source:     pulumi.NewFileArchive("./config"),
 		RemotePath: pulumi.String("/home/" + cfg.SshUser + "/deploy-units"),
+		Triggers:   instanceTrigger,
 	}, pulumi.DependsOn([]pulumi.Resource{comp.EipAssoc, comp.Attachment}))
 	if err != nil {
 		return err
@@ -42,6 +49,13 @@ func deployNode(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage
 		return `set -euo pipefail
 sudo bash -s <<'BOOTSTRAP'
 set -euo pipefail
+# --- aws cli (Ubuntu images do not ship it; needed by validator-init) ---
+if ! command -v aws >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq && apt-get install -y -qq unzip >/dev/null
+  curl -fsSL -o /tmp/awscliv2.zip https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip
+  unzip -q /tmp/awscliv2.zip -d /tmp && /tmp/aws/install && rm -rf /tmp/aws /tmp/awscliv2.zip
+fi
 # --- users & groups (idempotent) ---
 getent group eth >/dev/null || groupadd eth
 for u in reth lighthouse mevboost; do
@@ -70,7 +84,10 @@ chmod 600 /etc/swannynode/validator.env
 # --- systemd units ---
 install -m 0644 ` + home + `/deploy-units/config/*.service /etc/systemd/system/ 2>/dev/null || install -m 0644 ` + home + `/deploy-units/*.service /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now mevboost reth-init reth lighthousebeacon
+# enable + start --no-block: reth-init is a oneshot with TimeoutStartSec=infinity,
+# so a blocking start would hang this bootstrap for the whole snapshot download.
+systemctl enable mevboost reth-init reth lighthousebeacon
+systemctl start --no-block mevboost reth-init reth lighthousebeacon
 systemctl enable validator-init lighthousevalidator
 BOOTSTRAP
 echo bootstrap-complete`

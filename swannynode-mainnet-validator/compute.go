@@ -12,12 +12,13 @@ type Compute struct {
 	EipAssoc   *ec2.EipAssociation
 }
 
-// createCompute provisions the disposable instance. AMI comes from the SSM
-// public parameter for AL2023 arm64; ignoreChanges on ami so routine AMI
-// refreshes never force an instance replacement.
+// createCompute provisions the disposable instance. AMI comes from Canonical's
+// SSM public parameter for Ubuntu 24.04 arm64 — glibc 2.39 is required by the
+// reth/lighthouse release binaries (AL2023's glibc 2.34 is too old for them).
+// ignoreChanges on ami so routine AMI refreshes never force a replacement.
 func createCompute(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage, id *Identity) (*Compute, error) {
 	ami, err := ssm.LookupParameter(ctx, &ssm.LookupParameterArgs{
-		Name: "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64",
+		Name: "/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id",
 	})
 	if err != nil {
 		return nil, err
