@@ -1,0 +1,18 @@
+[Unit]
+Description=lighthouse beacon node (mainnet)
+RequiresMountsFor=/data
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=lighthouse
+Group=eth
+ExecStart=/data/scripts/start_lighthouse_bn.sh
+Restart=always
+RestartSec=30s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lighthouse-bn
+
+[Install]
+WantedBy=multi-user.target

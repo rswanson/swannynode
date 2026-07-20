@@ -1,0 +1,3 @@
+name: swannynode-mainnet-validator
+runtime: go
+description: Cost-optimized mainnet reth --minimal validator (EC2 + EBS + Secrets Manager)
