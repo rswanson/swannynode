@@ -75,5 +75,22 @@ Operational notes:
 - `validator-init` writes `/data/mainnet/lighthouse/.validator-import-complete`
   only after BOTH keystore and slashing imports succeed; delete that sentinel to
   force a re-import.
+- **Extended downtime (>5,000 blocks / ~17 hours behind):** reth's staged
+  pipeline triggers a FULL state-root rebuild when the sync gap exceeds its
+  merkle `clean_threshold` (default 5,000 blocks). On this gp3 volume that
+  rebuild took ~4.5 hours (latency-bound at ~1,700 random 4KB reads/s) —
+  observed during the 2026-07-19 recovery, where a 7,631-block gap cost:
+  download 33m → extract 47m → verify 41m → trie rebuild ~4.5h → gap
+  execution ~1h. If the node is more than ~5,000 blocks behind, it is FASTER
+  to re-bootstrap from a fresh snapshot than to let the pipeline grind:
+  `sudo systemctl stop reth && sudo rm -rf /data/mainnet/reth/* && sudo systemctl restart reth-init`
+  (reth-init re-downloads ~170GB with resume and reth follows automatically;
+  ~2h total). Alternatively, raise the threshold in the reth config
+  (`[stages.merkle] clean_threshold`) before restarting reth so a medium gap
+  uses the incremental merkle path instead.
+- gp3 sync performance is latency-bound at queue-depth 1, not IOPS-bound —
+  raising provisioned IOPS does not speed up state-root work; RAM/page-cache
+  (the reason for 32GB) is what absorbs it. Steady-state validation is
+  unaffected (blocks validate in 1–3s).
 
 **Never** run two copies of this stack (or the old host) against the same keys.
