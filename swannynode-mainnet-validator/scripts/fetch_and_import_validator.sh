@@ -6,7 +6,8 @@
 # A hard failure here (e.g. secrets not yet pushed) is INTENTIONAL — it keeps
 # lighthousevalidator.service from ever starting without keys + slashing data.
 set -euo pipefail
-DATADIR="${DATADIR:-/data/mainnet/lighthouse}"
+# Defaults to the EBS-backed validator volume, never the ephemeral /data.
+DATADIR="${DATADIR:-${VALIDATOR_DATADIR:-/validator/lighthouse}}"
 LH_BIN="${LH_BIN:-/data/bin/lighthouse}"
 SECRET_PREFIX="${SECRET_PREFIX:-mainnet-validator}"
 SENTINEL="$DATADIR/.validator-import-complete"

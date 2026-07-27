@@ -1,8 +1,9 @@
 [Unit]
 Description=reth one-time snapshot initialization (guarded; no-op if datadir exists)
 RequiresMountsFor=/data
+Requires=data-reprovision.service
 Wants=network-online.target
-After=network-online.target
+After=network-online.target data-reprovision.service
 
 [Service]
 Type=oneshot
@@ -10,7 +11,7 @@ RemainAfterExit=yes
 User=reth
 Group=eth
 TimeoutStartSec=infinity
-ExecStart=/data/scripts/reth_init.sh
+ExecStart=/opt/swannynode/scripts/reth_init.sh
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=reth-init

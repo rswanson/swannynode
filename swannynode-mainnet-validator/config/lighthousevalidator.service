@@ -1,5 +1,10 @@
 [Unit]
 Description=lighthouse validator client (mainnet)
+# /validator is deliberately NOT listed here: on EBS-backed stacks it never
+# exists, so this base unit stays mode-agnostic. Instance-store stacks get a
+# ConditionPathIsMountPoint=/validator drop-in written by the bootstrap (see
+# deploy.go), so the VC refuses to start against an unmounted /validator
+# instead of signing off an empty datadir.
 RequiresMountsFor=/data
 Requires=validator-init.service
 After=validator-init.service lighthousebeacon.service
@@ -8,7 +13,7 @@ After=validator-init.service lighthousebeacon.service
 User=lighthouse
 Group=eth
 EnvironmentFile=/etc/swannynode/validator.env
-ExecStart=/data/scripts/start_lighthouse_vc.sh
+ExecStart=/opt/swannynode/scripts/start_lighthouse_vc.sh
 Restart=always
 RestartSec=30s
 StandardOutput=journal

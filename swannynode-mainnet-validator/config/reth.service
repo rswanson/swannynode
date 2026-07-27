@@ -8,7 +8,7 @@ Wants=network-online.target
 [Service]
 User=reth
 Group=eth
-ExecStart=/data/scripts/start_reth.sh
+ExecStart=/opt/swannynode/scripts/start_reth.sh
 Restart=always
 RestartSec=30s
 StandardOutput=journal

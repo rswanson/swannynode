@@ -1,0 +1,18 @@
+[Unit]
+Description=self-heal /data after an instance-store wipe (stop/start or replacement)
+Wants=network-online.target
+After=network-online.target
+Before=reth-init.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+EnvironmentFile=-/etc/swannynode/storage.env
+ExecStart=/opt/swannynode/scripts/reprovision_data.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=data-reprovision
+
+[Install]
+WantedBy=multi-user.target

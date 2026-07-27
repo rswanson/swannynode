@@ -10,26 +10,61 @@ import (
 const backupTag = "swannynode-mainnet-validator"
 
 type Storage struct {
+	// Volume is the EBS chain-data volume. It is nil when the stack runs chain
+	// data on ephemeral instance-store NVMe.
 	Volume *ebs.Volume
+	// ValidatorVolume holds the slashing-protection DB and keystores. Always
+	// EBS, always present — losing it risks a slashing event, so it is the one
+	// piece of host state that must survive instance replacement.
+	ValidatorVolume *ebs.Volume
 }
 
-// createStorage provisions the persistent chain-data volume and its snapshot
-// policy. The volume is Protect()ed and RetainOnDelete so no Pulumi operation
-// can destroy chain data.
+// createStorage provisions the validator-state volume (always) and the
+// chain-data volume (only when not using instance store), plus the shared
+// snapshot policy. Both volumes are Protect()ed and RetainOnDelete so no
+// Pulumi operation can destroy them.
 func createStorage(ctx *pulumi.Context, cfg StackConfig) (*Storage, error) {
-	vol, err := ebs.NewVolume(ctx, "validator-data", &ebs.VolumeArgs{
-		AvailabilityZone: pulumi.String(cfg.Az),
-		Size:             pulumi.Int(cfg.VolumeSizeGb),
-		Type:             pulumi.String("gp3"),
-		Iops:             pulumi.Int(cfg.VolumeIops),
-		Throughput:       pulumi.Int(cfg.VolumeThroughput),
-		Tags: pulumi.StringMap{
-			"Name":   pulumi.String("swannynode-mainnet-validator-data"),
-			"Backup": pulumi.String(backupTag),
-		},
-	}, pulumi.Protect(true), pulumi.RetainOnDelete(true))
-	if err != nil {
-		return nil, err
+	// Only needed when /data is ephemeral. On EBS-backed stacks validator state
+	// already sits on a durable volume, and introducing this one would repoint a
+	// live validator at an empty datadir.
+	var valVol *ebs.Volume
+	var err error
+	if cfg.UseInstanceStore {
+		// Small, cheap, and the only volume whose loss is unrecoverable.
+		valVol, err = ebs.NewVolume(ctx, "validator-state", &ebs.VolumeArgs{
+			AvailabilityZone: pulumi.String(cfg.Az),
+			Size:             pulumi.Int(cfg.ValidatorVolumeSizeGb),
+			Type:             pulumi.String("gp3"),
+			// Deliberately NOT provisioned beyond gp3 defaults: #80's 6,000 IOPS
+			// / 156 MB/s target the chain-data volume's measured saturation.
+			// Applying them here would bill ~$15/mo extra for a 20 GB disk that
+			// sees a couple of small writes per epoch.
+			Tags: pulumi.StringMap{
+				"Name":   pulumi.String("swannynode-mainnet-validator-state"),
+				"Backup": pulumi.String(backupTag),
+			},
+		}, pulumi.Protect(true), pulumi.RetainOnDelete(true))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var vol *ebs.Volume
+	if !cfg.UseInstanceStore {
+		vol, err = ebs.NewVolume(ctx, "validator-data", &ebs.VolumeArgs{
+			AvailabilityZone: pulumi.String(cfg.Az),
+			Size:             pulumi.Int(cfg.VolumeSizeGb),
+			Type:             pulumi.String("gp3"),
+			Iops:             pulumi.Int(cfg.VolumeIops),
+			Throughput:       pulumi.Int(cfg.VolumeThroughput),
+			Tags: pulumi.StringMap{
+				"Name":   pulumi.String("swannynode-mainnet-validator-data"),
+				"Backup": pulumi.String(backupTag),
+			},
+		}, pulumi.Protect(true), pulumi.RetainOnDelete(true))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	dlmRole, err := iam.NewRole(ctx, "dlm-lifecycle-role", &iam.RoleArgs{
@@ -80,5 +115,5 @@ func createStorage(ctx *pulumi.Context, cfg StackConfig) (*Storage, error) {
 		return nil, err
 	}
 
-	return &Storage{Volume: vol}, nil
+	return &Storage{Volume: vol, ValidatorVolume: valVol}, nil
 }

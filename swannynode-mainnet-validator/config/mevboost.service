@@ -1,13 +1,14 @@
 [Unit]
 Description=mev-boost (mainnet)
 RequiresMountsFor=/data
+Requires=data-reprovision.service
 Wants=network-online.target
-After=network-online.target
+After=network-online.target data-reprovision.service
 
 [Service]
 User=mevboost
 Group=eth
-ExecStart=/data/scripts/start_mevboost.sh
+ExecStart=/opt/swannynode/scripts/start_mevboost.sh
 Restart=always
 RestartSec=5s
 StandardOutput=journal

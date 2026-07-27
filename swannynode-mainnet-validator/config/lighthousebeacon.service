@@ -1,13 +1,14 @@
 [Unit]
 Description=lighthouse beacon node (mainnet)
 RequiresMountsFor=/data
+Requires=data-reprovision.service
 Wants=network-online.target
-After=network-online.target
+After=network-online.target data-reprovision.service
 
 [Service]
 User=lighthouse
 Group=eth
-ExecStart=/data/scripts/start_lighthouse_bn.sh
+ExecStart=/opt/swannynode/scripts/start_lighthouse_bn.sh
 Restart=always
 RestartSec=30s
 StandardOutput=journal
