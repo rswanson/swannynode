@@ -5,6 +5,20 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
+// exportOutputs publishes the stack outputs. Split out of main so the nil
+// chain-data volume case (instance-store stacks) is unit-testable — a plain
+// sto.Volume.ID() here panicked during `pulumi preview`, and no amount of
+// component-level testing caught it because nothing else touches the exports.
+func exportOutputs(ctx *pulumi.Context, net *Network, sto *Storage, comp *Compute) {
+	ctx.Export("instanceId", comp.Instance.ID())
+	ctx.Export("publicIp", net.Eip.PublicIp)
+	ctx.Export("validatorVolumeId", sto.ValidatorVolume.ID())
+	// Absent on instance-store stacks: there is no chain-data volume to report.
+	if sto.Volume != nil {
+		ctx.Export("dataVolumeId", sto.Volume.ID())
+	}
+}
+
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		cfg := config.New(ctx, "")
@@ -32,9 +46,7 @@ func main() {
 			return err
 		}
 
-		ctx.Export("instanceId", comp.Instance.ID())
-		ctx.Export("publicIp", net.Eip.PublicIp)
-		ctx.Export("dataVolumeId", sto.Volume.ID())
+		exportOutputs(ctx, net, sto, comp)
 		return nil
 	})
 }

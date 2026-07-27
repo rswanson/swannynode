@@ -1,0 +1,10 @@
+encryptionsalt: v1:ITA4p8O0bYA=:v1:OkqrufI1zVTFWrCv:2bJYK7rp6kDgOByzdqy+mJtj9CoGuw==
+config:
+  aws:region: us-east-2
+  swannynode-mainnet-validator:instanceType: i8g.xlarge
+  swannynode-mainnet-validator:useInstanceStore: "true"
+  swannynode-mainnet-validator:createSecrets: "false"
+  swannynode-mainnet-validator:feeRecipient: 0x501b2Fa292a0465bC2d0C92a9C88B483A9a2Cb29
+  swannynode-mainnet-validator:keyName: swannynode
+  swannynode-mainnet-validator:sshKey:
+    secure: v1:gtAn5NlYpbIIIb+5:Xio7Cencm20aeHLo3cQ1iKPNL21NW8q5n1KkRnDExZQ18iZGD1Cnn142nkV19Aae0LN6oOS/S6kFVWNGnRtUu09dnF0XyTwWaNx/j26GgKCIFHrogH8+nM2tEm2EuEaS8ozhwXAwoIIbPx/JKuoAel/xSj6pwYLJ8ikFLscfT9lQIKCGSJ6NlaS9VJ83/hD/5CNVT0SIX7ZoyVinYxVe84V4pkvlQS+B6v6ASlVl1wp++4U0zWYAQMXRkPeP2JFdGPUeFYh46pxMasp+d6ij9DjH87fKBD02lMfm16P4vQmrsOBueW96EHdcgWovs+JBGfRi5IGOL/DJk3x0118aCM1lH51V+n45/o8ZQRH2oGEhMOJ0CbTbmlRmRBfChQBvou6IP1lUZ8DD+xwGMzmRSC5pmDX8A/wAa6Jz2NhAQZj5HHxGKbBasfrlKam7Kq7K65duOX87XuYKiFbxAFiTZfjhZ1hCYUv90gF103nPq4yVgjrzM82lUXH6D73luHXcTZJOn/NESiEYFEA3a70Vkde/
