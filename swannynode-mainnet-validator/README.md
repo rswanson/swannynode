@@ -138,7 +138,7 @@ start a second signer.
    `cd ../alarms && pulumi config set instanceId <new id> && pulumi up`;
    update the prometheus target IP in `../monitoring` and `pulumi up`.
 9. Verify `reth node --help | grep -A2 minimal` on the box matches the
-   `--minimal` flag used in `/data/scripts/start_reth.sh` (flag verified
+   `--minimal` flag used in `/opt/swannynode/scripts/start_reth.sh` (flag verified
    against the pinned release).
 
 ## Recovery runbook

@@ -47,6 +47,8 @@ grep -q "mkfs.ext4 .*$tmp/dev/nvme1n1" "$tmp/calls.log"; check "formats the inst
 ! grep -q "mkfs.ext4 .*nvme2n1" "$tmp/calls.log"; check "never formats the EBS validator volume" $?
 grep -q "noatime" "$tmp/fstab"; check "fstab entry uses noatime" $?
 grep -q "nofail" "$tmp/fstab"; check "fstab entry uses nofail so a missing ephemeral disk cannot wedge boot" $?
+grep -q "^LABEL=chain-data $tmp/mnt " "$tmp/fstab"; check "fstab entry mounts by LABEL=chain-data" $?
+! grep -q "$tmp/dev/nvme1n1" "$tmp/fstab"; check "fstab entry does not reference the unstable device path" $?
 rm -rf "$tmp"
 
 echo "case: existing filesystem is left intact (reboot, not a fresh host)"

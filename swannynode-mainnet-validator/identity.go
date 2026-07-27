@@ -38,10 +38,18 @@ func createIdentity(ctx *pulumi.Context, cfg StackConfig) (*Identity, error) {
 			arns = append(arns, existing.Arn)
 			continue
 		}
+		// Protect + RetainOnDelete: this secret outlives any single stack. The
+		// migration runbook hands ownership of this key material from the live
+		// stack to a new one and ends with `pulumi destroy` on the old stack —
+		// without these options that destroy schedules the keystore /
+		// slashing-protection secrets for deletion, breaking the new host's DR
+		// re-import path, future slashing-protection refreshes, and eventually
+		// `pulumi up` on the migration stack itself. Matches how the EBS volumes
+		// in storage.go are protected.
 		s, err := secretsmanager.NewSecret(ctx, "validator-secret-"+n, &secretsmanager.SecretArgs{
 			Name:        pulumi.String(fullName),
 			Description: pulumi.String("mainnet validator " + n + " (value pushed out-of-band)"),
-		})
+		}, pulumi.Protect(true), pulumi.RetainOnDelete(true))
 		if err != nil {
 			return nil, err
 		}

@@ -61,10 +61,16 @@ fi
 mkdir -p "$MOUNT"
 # nofail so a missing ephemeral device can never wedge boot; noatime because
 # reth's read volume makes atime updates pure write amplification.
-# Mounted by device path, not UUID: mkfs runs again on every fresh host, so a
-# UUID baked into fstab would go stale exactly when it matters.
+# Mounted by filesystem LABEL, not device path: NVMe ordinals can shift
+# between boots (see header), so a device path baked into fstab can end up
+# pointing at whatever else enumerates there next — including the validator
+# EBS volume, which would then double-mount under /data and /validator and
+# leave chain data unmounted. Not UUID either: mkfs runs again on every fresh
+# host, so a UUID baked into fstab would go stale exactly when it matters —
+# but the label is fixed by this same mkfs.ext4 -L chain-data call, so it
+# stays valid across both reboots and re-formats.
 if ! grep -q "[[:space:]]$MOUNT[[:space:]]" "$FSTAB"; then
-  echo "$DEV $MOUNT ext4 defaults,nofail,noatime 0 2" >> "$FSTAB"
+  echo "LABEL=chain-data $MOUNT ext4 defaults,nofail,noatime 0 2" >> "$FSTAB"
 fi
 mountpoint -q "$MOUNT" || mount "$MOUNT"
 mountpoint -q "$MOUNT" || { echo "$MOUNT is not mounted" >&2; exit 1; }

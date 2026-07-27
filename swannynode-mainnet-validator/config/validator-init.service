@@ -1,15 +1,21 @@
 [Unit]
 Description=validator one-time key + slashing-protection import from Secrets Manager
-RequiresMountsFor=/data /validator
+# /validator is deliberately NOT listed here: on EBS-backed stacks (no
+# instance store) it never exists at all, so this base unit stays
+# mode-agnostic. Instance-store stacks get a ConditionPathIsMountPoint=/validator
+# drop-in written by the bootstrap (see deploy.go), so the import can never
+# run against an unmounted/empty /validator and re-import a stale interchange.
+RequiresMountsFor=/data
+Requires=data-reprovision.service
 Wants=network-online.target
-After=network-online.target
+After=network-online.target data-reprovision.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 User=root
 EnvironmentFile=/etc/swannynode/validator.env
-ExecStart=/data/scripts/fetch_and_import_validator.sh
+ExecStart=/opt/swannynode/scripts/fetch_and_import_validator.sh
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=validator-init
