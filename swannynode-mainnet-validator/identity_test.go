@@ -11,7 +11,7 @@ import (
 func TestIdentitySecretsCreated(t *testing.T) {
 	m := newMocks()
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		_, err := createIdentity(ctx)
+		_, err := createIdentity(ctx, testCfg())
 		return err
 	}, pulumi.WithMocks("swannynode-mainnet-validator", "mainnet", m))
 	require.NoError(t, err)
@@ -26,7 +26,7 @@ func TestIdentitySecretsCreated(t *testing.T) {
 func TestIdentityRolePolicyReadsSecretsOnly(t *testing.T) {
 	m := newMocks()
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		_, err := createIdentity(ctx)
+		_, err := createIdentity(ctx, testCfg())
 		return err
 	}, pulumi.WithMocks("swannynode-mainnet-validator", "mainnet", m))
 	require.NoError(t, err)

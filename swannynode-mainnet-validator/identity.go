@@ -16,13 +16,30 @@ type Identity struct {
 // createIdentity provisions the three key-material secrets (created EMPTY —
 // values are pushed out-of-band so they never enter Pulumi state) and an
 // instance role that can read exactly those secrets plus use SSM.
-func createIdentity(ctx *pulumi.Context) (*Identity, error) {
+//
+// When cfg.CreateSecrets is false the secrets are looked up instead of created.
+// Secret names are account-unique, so a migration stack running in parallel
+// with the live stack MUST look up rather than create — otherwise `pulumi up`
+// either fails on a name collision or, worse, adopts key material that a later
+// `pulumi destroy` of the migration stack would schedule for deletion.
+func createIdentity(ctx *pulumi.Context, cfg StackConfig) (*Identity, error) {
 	names := []string{"keystore", "keystore-password", "slashing-protection"}
 	secrets := map[string]*secretsmanager.Secret{}
 	arns := []interface{}{}
 	for _, n := range names {
+		fullName := secretPrefix + "/" + n
+		if !cfg.CreateSecrets {
+			existing, err := secretsmanager.LookupSecret(ctx, &secretsmanager.LookupSecretArgs{
+				Name: pulumi.StringRef(fullName),
+			})
+			if err != nil {
+				return nil, err
+			}
+			arns = append(arns, existing.Arn)
+			continue
+		}
 		s, err := secretsmanager.NewSecret(ctx, "validator-secret-"+n, &secretsmanager.SecretArgs{
-			Name:        pulumi.String(secretPrefix + "/" + n),
+			Name:        pulumi.String(fullName),
 			Description: pulumi.String("mainnet validator " + n + " (value pushed out-of-band)"),
 		})
 		if err != nil {

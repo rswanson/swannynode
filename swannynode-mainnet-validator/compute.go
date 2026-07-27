@@ -7,9 +7,12 @@ import (
 )
 
 type Compute struct {
-	Instance   *ec2.Instance
-	Attachment *ec2.VolumeAttachment
-	EipAssoc   *ec2.EipAssociation
+	Instance *ec2.Instance
+	// Attachment is the chain-data volume attachment; nil when chain data
+	// lives on instance-store NVMe.
+	Attachment          *ec2.VolumeAttachment
+	ValidatorAttachment *ec2.VolumeAttachment
+	EipAssoc            *ec2.EipAssociation
 }
 
 // createCompute provisions the disposable instance. AMI comes from Canonical's
@@ -41,10 +44,23 @@ func createCompute(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Stor
 		return nil, err
 	}
 
-	att, err := ec2.NewVolumeAttachment(ctx, "validator-data-attach", &ec2.VolumeAttachmentArgs{
-		DeviceName:                  pulumi.String("/dev/sdf"),
+	var att *ec2.VolumeAttachment
+	if sto.Volume != nil {
+		att, err = ec2.NewVolumeAttachment(ctx, "validator-data-attach", &ec2.VolumeAttachmentArgs{
+			DeviceName:                  pulumi.String("/dev/sdf"),
+			InstanceId:                  inst.ID(),
+			VolumeId:                    sto.Volume.ID(),
+			StopInstanceBeforeDetaching: pulumi.Bool(true),
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	valAtt, err := ec2.NewVolumeAttachment(ctx, "validator-state-attach", &ec2.VolumeAttachmentArgs{
+		DeviceName:                  pulumi.String("/dev/sdg"),
 		InstanceId:                  inst.ID(),
-		VolumeId:                    sto.Volume.ID(),
+		VolumeId:                    sto.ValidatorVolume.ID(),
 		StopInstanceBeforeDetaching: pulumi.Bool(true),
 	})
 	if err != nil {
@@ -59,5 +75,10 @@ func createCompute(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Stor
 		return nil, err
 	}
 
-	return &Compute{Instance: inst, Attachment: att, EipAssoc: assoc}, nil
+	return &Compute{
+		Instance:            inst,
+		Attachment:          att,
+		ValidatorAttachment: valAtt,
+		EipAssoc:            assoc,
+	}, nil
 }

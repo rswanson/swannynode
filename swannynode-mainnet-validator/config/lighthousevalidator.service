@@ -1,6 +1,6 @@
 [Unit]
 Description=lighthouse validator client (mainnet)
-RequiresMountsFor=/data
+RequiresMountsFor=/data /validator
 Requires=validator-init.service
 After=validator-init.service lighthousebeacon.service
 

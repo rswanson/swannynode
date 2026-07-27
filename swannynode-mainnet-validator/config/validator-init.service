@@ -1,6 +1,6 @@
 [Unit]
 Description=validator one-time key + slashing-protection import from Secrets Manager
-RequiresMountsFor=/data
+RequiresMountsFor=/data /validator
 Wants=network-online.target
 After=network-online.target
 

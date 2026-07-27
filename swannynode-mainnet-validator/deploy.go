@@ -6,10 +6,13 @@ import (
 )
 
 // deployNode configures the instance over SSH: copies scripts/units, mounts
-// the data volume, installs pinned client binaries, and enables services.
-// The validator client is enabled but NOT started — validator-init gates it
-// on secrets being present, and first start is a deliberate manual step in
-// the migration runbook (after the old instance is stopped).
+// /data (ephemeral NVMe or EBS) and /validator (always EBS), installs pinned
+// client binaries, and enables services.
+//
+// The validator client is left DISABLED, not merely stopped. This host may be
+// built while another host is still signing for the same keys, so an enabled
+// unit would start a second signer on reboot. scripts/cutover_validator.sh
+// enables it, and only after proving the previous signer is dead.
 func deployNode(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage, comp *Compute, sshKey pulumi.StringOutput) error {
 	conn := &remote.ConnectionArgs{
 		Host:       net.Eip.PublicIp,
@@ -23,12 +26,19 @@ func deployNode(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage
 	// fresh copies and a fresh bootstrap run.
 	instanceTrigger := pulumi.Array{comp.Instance.ID()}
 
+	// Chain-data attachment is nil on instance-store stacks; a nil in a
+	// DependsOn slice panics inside the SDK rather than being ignored.
+	deps := []pulumi.Resource{comp.EipAssoc, comp.ValidatorAttachment}
+	if comp.Attachment != nil {
+		deps = append(deps, comp.Attachment)
+	}
+
 	copyScripts, err := remote.NewCopyToRemote(ctx, "copy-scripts", &remote.CopyToRemoteArgs{
 		Connection: conn,
 		Source:     pulumi.NewFileArchive("./scripts"),
 		RemotePath: pulumi.String("/home/" + cfg.SshUser + "/deploy"),
 		Triggers:   instanceTrigger,
-	}, pulumi.DependsOn([]pulumi.Resource{comp.EipAssoc, comp.Attachment}))
+	}, pulumi.DependsOn(deps))
 	if err != nil {
 		return err
 	}
@@ -38,14 +48,31 @@ func deployNode(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage
 		Source:     pulumi.NewFileArchive("./config"),
 		RemotePath: pulumi.String("/home/" + cfg.SshUser + "/deploy-units"),
 		Triggers:   instanceTrigger,
-	}, pulumi.DependsOn([]pulumi.Resource{comp.EipAssoc, comp.Attachment}))
+	}, pulumi.DependsOn(deps))
 	if err != nil {
 		return err
 	}
 
-	bootstrapScript := pulumi.All(sto.Volume.ID().ToStringOutput()).ApplyT(func(vs []interface{}) string {
+	// The chain-data volume may not exist (instance store); feed a placeholder
+	// through the Apply so the shape stays uniform either way.
+	chainVolID := pulumi.String("").ToStringOutput()
+	if sto.Volume != nil {
+		chainVolID = sto.Volume.ID().ToStringOutput()
+	}
+
+	bootstrapScript := pulumi.All(chainVolID, sto.ValidatorVolume.ID().ToStringOutput()).ApplyT(func(vs []interface{}) string {
 		volumeId := vs[0].(string)
+		validatorVolumeId := vs[1].(string)
 		home := "/home/" + cfg.SshUser
+
+		// /data is chain data: ephemeral NVMe or EBS depending on config.
+		mountChainData := `install -m 0755 ` + home + `/deploy/scripts/mount_instance_store.sh /usr/local/sbin/mount_instance_store.sh
+MOUNT=/data /usr/local/sbin/mount_instance_store.sh`
+		if !cfg.UseInstanceStore {
+			mountChainData = `install -m 0755 ` + home + `/deploy/scripts/mount_data.sh /usr/local/sbin/mount_data.sh
+VOLUME_ID=` + volumeId + ` MOUNT=/data /usr/local/sbin/mount_data.sh`
+		}
+
 		return `set -euo pipefail
 sudo bash -s <<'BOOTSTRAP'
 set -euo pipefail
@@ -61,11 +88,15 @@ getent group eth >/dev/null || groupadd eth
 for u in reth lighthouse mevboost; do
   id "$u" >/dev/null 2>&1 || useradd -m -s /bin/bash -g eth "$u"
 done
-# --- mount data volume ---
+# --- mount chain data at /data (ephemeral NVMe or EBS, per stack config) ---
+` + mountChainData + `
+# --- mount validator state at /validator (ALWAYS EBS: slashing protection
+#     lives here and must survive instance replacement) ---
 install -m 0755 ` + home + `/deploy/scripts/mount_data.sh /usr/local/sbin/mount_data.sh
-VOLUME_ID=` + volumeId + ` /usr/local/sbin/mount_data.sh
+VOLUME_ID=` + validatorVolumeId + ` MOUNT=/validator /usr/local/sbin/mount_data.sh
 # --- directory layout ---
 mkdir -p /data/bin /data/scripts /data/shared /data/mainnet/reth /data/mainnet/lighthouse
+mkdir -p /validator/lighthouse
 # --- scripts ---
 install -m 0755 ` + home + `/deploy/scripts/*.sh /data/scripts/
 # --- shared JWT (created once) ---
@@ -76,10 +107,11 @@ RETH_VERSION=` + cfg.RethVersion + ` LIGHTHOUSE_VERSION=` + cfg.LighthouseVersio
 # --- ownership ---
 chown -R reth:eth /data/mainnet/reth
 chown -R lighthouse:eth /data/mainnet/lighthouse
+chown -R lighthouse:eth /validator/lighthouse
 chown root:eth /data/bin /data/scripts /data/shared
 # --- validator env ---
 mkdir -p /etc/swannynode
-printf 'FEE_RECIPIENT=` + cfg.FeeRecipient + `\nSECRET_PREFIX=mainnet-validator\nAWS_DEFAULT_REGION=us-east-2\n' > /etc/swannynode/validator.env
+printf 'FEE_RECIPIENT=` + cfg.FeeRecipient + `\nSECRET_PREFIX=mainnet-validator\nAWS_DEFAULT_REGION=us-east-2\nVALIDATOR_DATADIR=/validator/lighthouse\n' > /etc/swannynode/validator.env
 chmod 600 /etc/swannynode/validator.env
 # --- systemd units ---
 install -m 0644 ` + home + `/deploy-units/config/*.service /etc/systemd/system/ 2>/dev/null || install -m 0644 ` + home + `/deploy-units/*.service /etc/systemd/system/
@@ -88,7 +120,16 @@ systemctl daemon-reload
 # so a blocking start would hang this bootstrap for the whole snapshot download.
 systemctl enable mevboost reth-init reth lighthousebeacon
 systemctl start --no-block mevboost reth-init reth lighthousebeacon
-systemctl enable validator-init lighthousevalidator
+# validator-init pre-stages keystore + slashing protection so the cutover window
+# is only a stop/export/import/start, not a Secrets Manager round trip.
+systemctl enable validator-init
+systemctl start --no-block validator-init
+# The validator client is deliberately left DISABLED. This host may be built
+# while ANOTHER host is still signing for the same keys; if the VC were enabled,
+# a reboot here would silently start a second signer and get the validator
+# slashed. cutover_validator.sh enables it, and only after proving the old
+# signer is dead.
+systemctl disable lighthousevalidator >/dev/null 2>&1 || true
 BOOTSTRAP
 echo bootstrap-complete`
 	}).(pulumi.StringOutput)

@@ -8,10 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDeployBootstrapContent(t *testing.T) {
+// bootstrapFor renders the remote bootstrap script for a given stack config.
+func bootstrapFor(t *testing.T, cfg StackConfig) string {
+	t.Helper()
 	m := newMocks()
 	err := pulumi.RunErr(func(ctx *pulumi.Context) error {
-		cfg := testCfg()
 		net, err := createNetwork(ctx, cfg)
 		if err != nil {
 			return err
@@ -20,7 +21,7 @@ func TestDeployBootstrapContent(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		id, err := createIdentity(ctx)
+		id, err := createIdentity(ctx, cfg)
 		if err != nil {
 			return err
 		}
@@ -34,9 +35,12 @@ func TestDeployBootstrapContent(t *testing.T) {
 
 	boot := m.get("bootstrap")
 	require.NotNil(t, boot, "expected remote command 'bootstrap'")
-	script := boot["create"].StringValue()
+	return boot["create"].StringValue()
+}
+
+func TestDeployBootstrapContent(t *testing.T) {
+	script := bootstrapFor(t, testCfg())
 	for _, want := range []string{
-		"mount_data.sh",      // volume mounted before anything else
 		"install_clients.sh", // pinned binaries
 		"v2.4.1",             // reth pin flows into bootstrap
 		"FEE_RECIPIENT=",     // env file for the vc
@@ -46,8 +50,11 @@ func TestDeployBootstrapContent(t *testing.T) {
 		// --no-block: reth-init is a oneshot with infinite timeout; a blocking
 		// start would hang the bootstrap for the whole snapshot download
 		"systemctl start --no-block mevboost reth-init reth lighthousebeacon",
-		"awscli-exe-linux-aarch64.zip",                        // Ubuntu images lack aws cli; validator-init needs it
-		"systemctl enable validator-init lighthousevalidator", // enabled, NOT started: gated on secrets + old node stopped
+		"awscli-exe-linux-aarch64.zip",            // Ubuntu images lack aws cli; validator-init needs it
+		"systemctl enable validator-init",         // pre-stage keys so cutover is a fast stop/start
+		"MOUNT=/validator",                        // slashing protection on its own EBS volume
+		"VALIDATOR_DATADIR=/validator/lighthouse", // vc + validator-init both read this
+		"systemctl disable lighthousevalidator",
 	} {
 		require.True(t, strings.Contains(script, want), "bootstrap script missing %q", want)
 	}
@@ -55,4 +62,29 @@ func TestDeployBootstrapContent(t *testing.T) {
 		"blocking enable --now must not be used; vc must never auto-start on first deploy")
 	require.False(t, strings.Contains(script, "start --no-block lighthousevalidator"),
 		"vc must never auto-start on first deploy")
+
+	// Regression: this host can be built while ANOTHER host is still signing for
+	// the same keys. An enabled vc unit would start a second signer on reboot
+	// and get the validator slashed, so it must be left explicitly disabled.
+	require.False(t, strings.Contains(script, "systemctl enable validator-init lighthousevalidator"),
+		"vc must NOT be enabled at bootstrap: a reboot during a parallel migration would start a second signer")
+}
+
+func TestDeployMountsInstanceStoreWhenConfigured(t *testing.T) {
+	script := bootstrapFor(t, testCfg())
+	require.True(t, strings.Contains(script, "mount_instance_store.sh"),
+		"instance-store stacks must mount /data from ephemeral NVMe")
+	require.False(t, strings.Contains(script, "MOUNT=/data /usr/local/sbin/mount_data.sh"),
+		"instance-store stacks must not mount /data from EBS")
+}
+
+func TestDeployMountsEbsChainDataWhenConfigured(t *testing.T) {
+	script := bootstrapFor(t, ebsCfg())
+	require.True(t, strings.Contains(script, "MOUNT=/data /usr/local/sbin/mount_data.sh"),
+		"EBS stacks must mount /data from the chain-data volume")
+	require.False(t, strings.Contains(script, "mount_instance_store.sh"),
+		"EBS stacks must not touch the instance-store mount path")
+	// The validator volume is mounted regardless of how chain data is stored.
+	require.True(t, strings.Contains(script, "MOUNT=/validator"),
+		"validator state volume must be mounted in both storage modes")
 }

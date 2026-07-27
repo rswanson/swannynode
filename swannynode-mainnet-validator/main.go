@@ -18,7 +18,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		id, err := createIdentity(ctx)
+		id, err := createIdentity(ctx, sc)
 		if err != nil {
 			return err
 		}
