@@ -22,6 +22,7 @@ func createStorage(ctx *pulumi.Context, cfg StackConfig) (*Storage, error) {
 		Size:             pulumi.Int(cfg.VolumeSizeGb),
 		Type:             pulumi.String("gp3"),
 		Iops:             pulumi.Int(cfg.VolumeIops),
+		Throughput:       pulumi.Int(cfg.VolumeThroughput),
 		Tags: pulumi.StringMap{
 			"Name":   pulumi.String("swannynode-mainnet-validator-data"),
 			"Backup": pulumi.String(backupTag),
