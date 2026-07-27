@@ -94,9 +94,10 @@ Operational notes:
   that work; RAM/page-cache (the reason for 32GB) is what absorbs it.
   Steady-state validation is a different story: live `iostat` showed write
   IOPS at 2,600–2,968 against the old 3,000 ceiling, with `%util` pinned at
-  92–100% and queue depth (`aqu-sz`) around 10 during MDBX write bursts —
-  the volume was genuinely IOPS-bound, and read latency quadrupled
-  (0.87ms → 3.55ms) when it happened, stalling reth's block execution. The
+  92–100% and queue depth (`aqu-sz`) around 10 during RocksDB compaction
+  write bursts (reth 2.x uses RocksDB, not MDBX) — the volume was genuinely
+  IOPS-bound, and read latency quadrupled (0.87ms → 3.55ms) when it
+  happened, stalling reth's block validation. The
   volume is now provisioned at 6,000 IOPS / 156 MB/s (the `r8g.xlarge`
   instance's EBS baseline ceiling) to give steady-state validation headroom.
 
