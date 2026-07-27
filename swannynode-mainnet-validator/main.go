@@ -12,8 +12,10 @@ import (
 func exportOutputs(ctx *pulumi.Context, net *Network, sto *Storage, comp *Compute) {
 	ctx.Export("instanceId", comp.Instance.ID())
 	ctx.Export("publicIp", net.Eip.PublicIp)
-	ctx.Export("validatorVolumeId", sto.ValidatorVolume.ID())
-	// Absent on instance-store stacks: there is no chain-data volume to report.
+	// Each volume is absent in one storage mode; export only what exists.
+	if sto.ValidatorVolume != nil {
+		ctx.Export("validatorVolumeId", sto.ValidatorVolume.ID())
+	}
 	if sto.Volume != nil {
 		ctx.Export("dataVolumeId", sto.Volume.ID())
 	}

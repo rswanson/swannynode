@@ -84,7 +84,27 @@ func TestDeployMountsEbsChainDataWhenConfigured(t *testing.T) {
 		"EBS stacks must mount /data from the chain-data volume")
 	require.False(t, strings.Contains(script, "mount_instance_store.sh"),
 		"EBS stacks must not touch the instance-store mount path")
-	// The validator volume is mounted regardless of how chain data is stored.
+}
+
+// Regression for the hazard `pulumi preview --stack mainnet` exposed: an
+// unconditional /validator datadir repoints a LIVE validator at an empty
+// volume. It keeps attesting off in-memory state, then on the next restart
+// validator-init re-imports a stale interchange from Secrets Manager and signs
+// against a slashing DB missing everything since the export.
+func TestDeployEbsStackKeepsValidatorDataDirInPlace(t *testing.T) {
+	script := bootstrapFor(t, ebsCfg())
+	require.True(t, strings.Contains(script, "VALIDATOR_DATADIR=/data/mainnet/lighthouse"),
+		"EBS stacks must keep the historical validator datadir")
+	require.False(t, strings.Contains(script, "/validator/lighthouse"),
+		"EBS stacks must never reference the instance-store validator path")
+	require.False(t, strings.Contains(script, "MOUNT=/validator"),
+		"EBS stacks must not provision or mount a separate validator volume")
+}
+
+func TestDeployInstanceStoreSplitsValidatorDataDir(t *testing.T) {
+	script := bootstrapFor(t, testCfg())
+	require.True(t, strings.Contains(script, "VALIDATOR_DATADIR=/validator/lighthouse"),
+		"instance-store stacks must keep validator state off ephemeral /data")
 	require.True(t, strings.Contains(script, "MOUNT=/validator"),
-		"validator state volume must be mounted in both storage modes")
+		"instance-store stacks must mount the validator volume")
 }

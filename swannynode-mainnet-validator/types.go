@@ -25,9 +25,10 @@ type StackConfig struct {
 	VolumeIops       int
 	VolumeThroughput int
 
-	// ValidatorVolumeSizeGb is the small, always-EBS volume holding the
-	// slashing-protection database and keystores — the only irreplaceable
-	// state on the host.
+	// ValidatorVolumeSizeGb sizes the small EBS volume holding the
+	// slashing-protection database and keystores — the only irreplaceable state
+	// on the host. Only provisioned when UseInstanceStore is true; on EBS-backed
+	// stacks /data is already durable, so the split would be pure churn.
 	ValidatorVolumeSizeGb int
 
 	// CreateSecrets controls whether this stack CREATES the Secrets Manager
@@ -65,6 +66,20 @@ func getBoolOr(cfg *config.Config, key string, def bool) bool {
 		return cfg.GetBool(key)
 	}
 	return def
+}
+
+// validatorDataDir is where keystores and the slashing-protection DB live.
+//
+// It follows the storage mode rather than being fixed. On instance-store stacks
+// /data is ephemeral, so validator state must sit on its own EBS volume. On
+// EBS-backed stacks /data is already durable and the historical location is
+// correct — moving it would repoint a live validator at an empty datadir, and
+// validator-init would then re-import a stale interchange from Secrets Manager.
+func (c StackConfig) validatorDataDir() string {
+	if c.UseInstanceStore {
+		return "/validator/lighthouse"
+	}
+	return "/data/mainnet/lighthouse"
 }
 
 func loadStackConfig(cfg *config.Config) StackConfig {

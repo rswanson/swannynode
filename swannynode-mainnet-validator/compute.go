@@ -57,14 +57,17 @@ func createCompute(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Stor
 		}
 	}
 
-	valAtt, err := ec2.NewVolumeAttachment(ctx, "validator-state-attach", &ec2.VolumeAttachmentArgs{
-		DeviceName:                  pulumi.String("/dev/sdg"),
-		InstanceId:                  inst.ID(),
-		VolumeId:                    sto.ValidatorVolume.ID(),
-		StopInstanceBeforeDetaching: pulumi.Bool(true),
-	})
-	if err != nil {
-		return nil, err
+	var valAtt *ec2.VolumeAttachment
+	if sto.ValidatorVolume != nil {
+		valAtt, err = ec2.NewVolumeAttachment(ctx, "validator-state-attach", &ec2.VolumeAttachmentArgs{
+			DeviceName:                  pulumi.String("/dev/sdg"),
+			InstanceId:                  inst.ID(),
+			VolumeId:                    sto.ValidatorVolume.ID(),
+			StopInstanceBeforeDetaching: pulumi.Bool(true),
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	assoc, err := ec2.NewEipAssociation(ctx, "validator-eip-assoc", &ec2.EipAssociationArgs{

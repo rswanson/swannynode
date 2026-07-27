@@ -26,11 +26,14 @@ func deployNode(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage
 	// fresh copies and a fresh bootstrap run.
 	instanceTrigger := pulumi.Array{comp.Instance.ID()}
 
-	// Chain-data attachment is nil on instance-store stacks; a nil in a
+	// Either attachment can be nil depending on storage mode, and a nil in a
 	// DependsOn slice panics inside the SDK rather than being ignored.
-	deps := []pulumi.Resource{comp.EipAssoc, comp.ValidatorAttachment}
+	deps := []pulumi.Resource{comp.EipAssoc}
 	if comp.Attachment != nil {
 		deps = append(deps, comp.Attachment)
+	}
+	if comp.ValidatorAttachment != nil {
+		deps = append(deps, comp.ValidatorAttachment)
 	}
 
 	copyScripts, err := remote.NewCopyToRemote(ctx, "copy-scripts", &remote.CopyToRemoteArgs{
@@ -53,17 +56,22 @@ func deployNode(ctx *pulumi.Context, cfg StackConfig, net *Network, sto *Storage
 		return err
 	}
 
-	// The chain-data volume may not exist (instance store); feed a placeholder
+	// Either volume may be absent depending on storage mode; feed placeholders
 	// through the Apply so the shape stays uniform either way.
 	chainVolID := pulumi.String("").ToStringOutput()
 	if sto.Volume != nil {
 		chainVolID = sto.Volume.ID().ToStringOutput()
 	}
+	valVolID := pulumi.String("").ToStringOutput()
+	if sto.ValidatorVolume != nil {
+		valVolID = sto.ValidatorVolume.ID().ToStringOutput()
+	}
 
-	bootstrapScript := pulumi.All(chainVolID, sto.ValidatorVolume.ID().ToStringOutput()).ApplyT(func(vs []interface{}) string {
+	bootstrapScript := pulumi.All(chainVolID, valVolID).ApplyT(func(vs []interface{}) string {
 		volumeId := vs[0].(string)
 		validatorVolumeId := vs[1].(string)
 		home := "/home/" + cfg.SshUser
+		validatorDataDir := cfg.validatorDataDir()
 
 		// /data is chain data: ephemeral NVMe or EBS depending on config.
 		mountChainData := `install -m 0755 ` + home + `/deploy/scripts/mount_instance_store.sh /usr/local/sbin/mount_instance_store.sh
@@ -71,6 +79,14 @@ MOUNT=/data /usr/local/sbin/mount_instance_store.sh`
 		if !cfg.UseInstanceStore {
 			mountChainData = `install -m 0755 ` + home + `/deploy/scripts/mount_data.sh /usr/local/sbin/mount_data.sh
 VOLUME_ID=` + volumeId + ` MOUNT=/data /usr/local/sbin/mount_data.sh`
+		}
+
+		// Only instance-store stacks get a separate validator volume. On EBS
+		// stacks validator state stays where it already is under /data.
+		mountValidator := "# validator state lives under /data on EBS-backed stacks"
+		if cfg.UseInstanceStore {
+			mountValidator = `install -m 0755 ` + home + `/deploy/scripts/mount_data.sh /usr/local/sbin/mount_data.sh
+VOLUME_ID=` + validatorVolumeId + ` MOUNT=/validator /usr/local/sbin/mount_data.sh`
 		}
 
 		return `set -euo pipefail
@@ -90,13 +106,11 @@ for u in reth lighthouse mevboost; do
 done
 # --- mount chain data at /data (ephemeral NVMe or EBS, per stack config) ---
 ` + mountChainData + `
-# --- mount validator state at /validator (ALWAYS EBS: slashing protection
-#     lives here and must survive instance replacement) ---
-install -m 0755 ` + home + `/deploy/scripts/mount_data.sh /usr/local/sbin/mount_data.sh
-VOLUME_ID=` + validatorVolumeId + ` MOUNT=/validator /usr/local/sbin/mount_data.sh
+# --- validator state (own EBS volume only when /data is ephemeral) ---
+` + mountValidator + `
 # --- directory layout ---
 mkdir -p /data/bin /data/scripts /data/shared /data/mainnet/reth /data/mainnet/lighthouse
-mkdir -p /validator/lighthouse
+mkdir -p ` + validatorDataDir + `
 # --- scripts ---
 install -m 0755 ` + home + `/deploy/scripts/*.sh /data/scripts/
 # --- shared JWT (created once) ---
@@ -107,11 +121,11 @@ RETH_VERSION=` + cfg.RethVersion + ` LIGHTHOUSE_VERSION=` + cfg.LighthouseVersio
 # --- ownership ---
 chown -R reth:eth /data/mainnet/reth
 chown -R lighthouse:eth /data/mainnet/lighthouse
-chown -R lighthouse:eth /validator/lighthouse
+chown -R lighthouse:eth ` + validatorDataDir + `
 chown root:eth /data/bin /data/scripts /data/shared
 # --- validator env ---
 mkdir -p /etc/swannynode
-printf 'FEE_RECIPIENT=` + cfg.FeeRecipient + `\nSECRET_PREFIX=mainnet-validator\nAWS_DEFAULT_REGION=us-east-2\nVALIDATOR_DATADIR=/validator/lighthouse\n' > /etc/swannynode/validator.env
+printf 'FEE_RECIPIENT=` + cfg.FeeRecipient + `\nSECRET_PREFIX=mainnet-validator\nAWS_DEFAULT_REGION=us-east-2\nVALIDATOR_DATADIR=` + validatorDataDir + `\n' > /etc/swannynode/validator.env
 chmod 600 /etc/swannynode/validator.env
 # --- systemd units ---
 install -m 0644 ` + home + `/deploy-units/config/*.service /etc/systemd/system/ 2>/dev/null || install -m 0644 ` + home + `/deploy-units/*.service /etc/systemd/system/

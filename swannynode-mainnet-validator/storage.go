@@ -24,24 +24,29 @@ type Storage struct {
 // snapshot policy. Both volumes are Protect()ed and RetainOnDelete so no
 // Pulumi operation can destroy them.
 func createStorage(ctx *pulumi.Context, cfg StackConfig) (*Storage, error) {
-	// Small, cheap, and the only volume whose loss is unrecoverable. Default
-	// gp3 performance (3,000 IOPS / 125 MB/s) is ample: the slashing-protection
-	// DB sees a couple of small writes per epoch.
-	valVol, err := ebs.NewVolume(ctx, "validator-state", &ebs.VolumeArgs{
-		AvailabilityZone: pulumi.String(cfg.Az),
-		Size:             pulumi.Int(cfg.ValidatorVolumeSizeGb),
-		Type:             pulumi.String("gp3"),
-		// Deliberately NOT provisioned beyond gp3 defaults: #80's 6,000 IOPS /
-		// 156 MB/s targets the chain-data volume's measured saturation. Applying
-		// them here would bill ~$15/mo extra for a 20 GB disk that sees a couple
-		// of small writes per epoch.
-		Tags: pulumi.StringMap{
-			"Name":   pulumi.String("swannynode-mainnet-validator-state"),
-			"Backup": pulumi.String(backupTag),
-		},
-	}, pulumi.Protect(true), pulumi.RetainOnDelete(true))
-	if err != nil {
-		return nil, err
+	// Only needed when /data is ephemeral. On EBS-backed stacks validator state
+	// already sits on a durable volume, and introducing this one would repoint a
+	// live validator at an empty datadir.
+	var valVol *ebs.Volume
+	var err error
+	if cfg.UseInstanceStore {
+		// Small, cheap, and the only volume whose loss is unrecoverable.
+		valVol, err = ebs.NewVolume(ctx, "validator-state", &ebs.VolumeArgs{
+			AvailabilityZone: pulumi.String(cfg.Az),
+			Size:             pulumi.Int(cfg.ValidatorVolumeSizeGb),
+			Type:             pulumi.String("gp3"),
+			// Deliberately NOT provisioned beyond gp3 defaults: #80's 6,000 IOPS
+			// / 156 MB/s target the chain-data volume's measured saturation.
+			// Applying them here would bill ~$15/mo extra for a 20 GB disk that
+			// sees a couple of small writes per epoch.
+			Tags: pulumi.StringMap{
+				"Name":   pulumi.String("swannynode-mainnet-validator-state"),
+				"Backup": pulumi.String(backupTag),
+			},
+		}, pulumi.Protect(true), pulumi.RetainOnDelete(true))
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var vol *ebs.Volume
