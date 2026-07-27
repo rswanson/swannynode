@@ -13,7 +13,8 @@ Secrets Manager, and daily DLM snapshots. Design spec:
 | `az` | `us-east-2a` | change + snapshot-restore to move AZ |
 | `instanceType` | `r8g.xlarge` | |
 | `volumeSizeGb` | `600` | |
-| `volumeIops` | `3000` | raise if sync is IOPS-bound |
+| `volumeIops` | `6000` | matched to the `r8g.xlarge` EBS baseline ceiling (6,000 IOPS) — going higher would be unusable spend |
+| `volumeThroughput` | `156` | matched to the `r8g.xlarge` EBS baseline ceiling (156.25 MB/s) |
 | `rethVersion` | `v2.4.1` | GitHub release tag |
 | `lighthouseVersion` | `v8.2.0` | GitHub release tag |
 | `mevboostVersion` | `1.12` | GitHub release tag (no `v` in asset name) |
@@ -88,9 +89,15 @@ Operational notes:
   ~2h total). Alternatively, raise the threshold in the reth config
   (`[stages.merkle] clean_threshold`) before restarting reth so a medium gap
   uses the incremental merkle path instead.
-- gp3 sync performance is latency-bound at queue-depth 1, not IOPS-bound —
-  raising provisioned IOPS does not speed up state-root work; RAM/page-cache
-  (the reason for 32GB) is what absorbs it. Steady-state validation is
-  unaffected (blocks validate in 1–3s).
+- A large *sync gap* state-root rebuild (see above) is latency-bound at
+  queue-depth 1, not IOPS-bound — raising provisioned IOPS does not speed up
+  that work; RAM/page-cache (the reason for 32GB) is what absorbs it.
+  Steady-state validation is a different story: live `iostat` showed write
+  IOPS at 2,600–2,968 against the old 3,000 ceiling, with `%util` pinned at
+  92–100% and queue depth (`aqu-sz`) around 10 during MDBX write bursts —
+  the volume was genuinely IOPS-bound, and read latency quadrupled
+  (0.87ms → 3.55ms) when it happened, stalling reth's block execution. The
+  volume is now provisioned at 6,000 IOPS / 156 MB/s (the `r8g.xlarge`
+  instance's EBS baseline ceiling) to give steady-state validation headroom.
 
 **Never** run two copies of this stack (or the old host) against the same keys.

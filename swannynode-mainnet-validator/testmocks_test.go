@@ -44,7 +44,7 @@ func (m *recordingMocks) get(name string) resource.PropertyMap {
 func testCfg() StackConfig {
 	return StackConfig{
 		Az: "us-east-2a", InstanceType: "r8g.xlarge",
-		VolumeSizeGb: 600, VolumeIops: 3000,
+		VolumeSizeGb: 600, VolumeIops: 6000, VolumeThroughput: 156,
 		RethVersion: "v2.4.1", LighthouseVersion: "v8.2.0", MevboostVersion: "1.12",
 		FeeRecipient: "0x0000000000000000000000000000000000000001",
 		KeyName:      "test-key", SshUser: "ec2-user",

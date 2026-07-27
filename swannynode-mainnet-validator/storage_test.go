@@ -20,6 +20,8 @@ func TestStorageVolumeShape(t *testing.T) {
 	require.Equal(t, 600.0, vol["size"].NumberValue())
 	require.Equal(t, "gp3", vol["type"].StringValue())
 	require.Equal(t, "us-east-2a", vol["availabilityZone"].StringValue())
+	require.Equal(t, 6000.0, vol["iops"].NumberValue())
+	require.Equal(t, 156.0, vol["throughput"].NumberValue())
 	tags := vol["tags"].ObjectValue()
 	require.Equal(t, "swannynode-mainnet-validator", tags["Backup"].StringValue())
 }

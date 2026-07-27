@@ -11,6 +11,7 @@ type StackConfig struct {
 	InstanceType      string
 	VolumeSizeGb      int
 	VolumeIops        int
+	VolumeThroughput  int
 	RethVersion       string
 	LighthouseVersion string
 	MevboostVersion   string
@@ -38,7 +39,8 @@ func loadStackConfig(cfg *config.Config) StackConfig {
 		Az:                getOr(cfg, "az", "us-east-2a"),
 		InstanceType:      getOr(cfg, "instanceType", "r8g.xlarge"),
 		VolumeSizeGb:      getIntOr(cfg, "volumeSizeGb", 600),
-		VolumeIops:        getIntOr(cfg, "volumeIops", 3000),
+		VolumeIops:        getIntOr(cfg, "volumeIops", 6000),
+		VolumeThroughput:  getIntOr(cfg, "volumeThroughput", 156),
 		RethVersion:       getOr(cfg, "rethVersion", "v2.4.1"),
 		LighthouseVersion: getOr(cfg, "lighthouseVersion", "v8.2.0"),
 		MevboostVersion:   getOr(cfg, "mevboostVersion", "1.12"),
